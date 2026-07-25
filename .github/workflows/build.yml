@@ -33,5 +33,3 @@ jobs:
         with:
           name: Subway-ImGui-Menu-Release
           path: out/*.zip
-
-          
