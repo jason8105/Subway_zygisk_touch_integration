@@ -10,13 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive # Crucial for fetching the ImGui components!
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
+
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.18.1'
 
       - name: Build Mod Menu
         run: |
