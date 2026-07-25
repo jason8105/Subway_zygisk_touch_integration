@@ -32,6 +32,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Subway-ImGui-Menu-Release
-          path: module/build/outputs/apk/release/*.zip
+          path: out/*.zip
 
           
