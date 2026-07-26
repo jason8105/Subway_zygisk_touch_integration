@@ -23,24 +23,18 @@ jobs:
         with:
           cmake-version: '3.18.1'
 
-      - name: Build Mod Menu with Info Logs
+      - name: Build Mod Menu
         run: |
           chmod +x ./gradlew
-          ./gradlew :module:assembleRelease --info
+          ./gradlew :module:assembleRelease
 
-      - name: Dump Workspace File Tree
+      - name: Prepare Artifact
         run: |
-          echo "=== ENTIRE WORKSPACE FILE LIST ==="
-          find . -maxdepth 4 -not -path '*/.*' -not -path './node_modules*'
-
-      - name: Locate and Move Build Output
-        run: |
-          mkdir -p final_output
-          find . -name "*.zip" -exec cp {} final_output/ \;
-          ls -la final_output/
+          mkdir -p final_release
+          cp out/*.zip final_release/ || find module/build -name "*.zip" -exec cp {} final_release/ \;
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Subway-ImGui-Menu-Release
-          path: final_output/*.zip
+          name: Zygisk-ImGui-Release
+          path: final_release/*.zip
