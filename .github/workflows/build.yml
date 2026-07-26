@@ -23,19 +23,15 @@ jobs:
         with:
           cmake-version: '3.18.1'
 
-      - name: Build Mod Menu
+      - name: Build Mod Menu with Info Logs
         run: |
           chmod +x ./gradlew
-          ./gradlew :module:assembleRelease
+          ./gradlew :module:assembleRelease --info
 
-      - name: Debug and Locate Build Output
+      - name: Dump Workspace File Tree
         run: |
-          echo "=== SEARCHING FOR ALL ZIP FILES IN REPO ==="
-          find . -name "*.zip"
-          echo "=== CHECKING OUT FOLDER CONTENTS ==="
-          ls -la out/ || echo "out folder not found"
-          echo "=== CHECKING MODULE BUILD FOLDER ==="
-          find module/build -name "*.zip" || echo "no zip in module/build"
+          echo "=== ENTIRE WORKSPACE FILE LIST ==="
+          find . -maxdepth 4 -not -path '*/.*' -not -path './node_modules*'
 
       - name: Locate and Move Build Output
         run: |
