@@ -33,6 +33,15 @@ include_directories(Includes)
 include_directories(ImGui)
 include_directories(ImGui/backends)
 
+# --- ADDED: Include paths for il2cpp and xdl ---
+include_directories(xdl/include)
+include_directories(il2cpp)
+include_directories(il2cpp/src)
+
+# --- ADDED: Automatically locate source files in the new folders ---
+aux_source_directory(xdl xdl-src)
+aux_source_directory(il2cpp il2cpp-src)
+
 add_library(${MODULE_NAME}
         SHARED
         ImGui/imgui.cpp
@@ -50,6 +59,9 @@ add_library(${MODULE_NAME}
         KittyMemory/MemoryPatch.cpp
         main.cpp
         hook.cpp
+        # --- ADDED: Inject the newly located source files ---
+        ${xdl-src}
+        ${il2cpp-src}
         )
 
 set(DOBBY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libdobby.a)
@@ -59,6 +71,7 @@ find_library(egl EGL)
 find_library(android android)
 find_library(GLESV2_LIB GLESv2)
 find_library(LZ_LIB z)
+
 if (${ANDROID_PLATFORM_LEVEL} LESS 12)
     message(FATAL_ERROR "OpenGL 2 is not supported before API level 11 /
                       (currently using ${ANDROID_PLATFORM_LEVEL}).")
@@ -78,7 +91,11 @@ target_link_libraries(
         ${OPENGL_LIB}
         ${GLESV2_LIB}
         ${android}
-        ${egl}  )
+        ${egl}
+        # --- ADDED: Link Zlib, required by xdl ---
+        ${LZ_LIB}
+        )
+
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_custom_command(TARGET ${MODULE_NAME} POST_BUILD
             COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/lib${MODULE_NAME}.so")
