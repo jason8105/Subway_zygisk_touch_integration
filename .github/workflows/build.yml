@@ -28,9 +28,23 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :module:assembleRelease
 
+      - name: Debug and Locate Build Output
+        run: |
+          echo "=== SEARCHING FOR ALL ZIP FILES IN REPO ==="
+          find . -name "*.zip"
+          echo "=== CHECKING OUT FOLDER CONTENTS ==="
+          ls -la out/ || echo "out folder not found"
+          echo "=== CHECKING MODULE BUILD FOLDER ==="
+          find module/build -name "*.zip" || echo "no zip in module/build"
+
+      - name: Locate and Move Build Output
+        run: |
+          mkdir -p final_output
+          find . -name "*.zip" -exec cp {} final_output/ \;
+          ls -la final_output/
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Subway-ImGui-Menu-Release
-          path: out/*.zip
-          
+          path: final_output/*.zip
