@@ -3,6 +3,9 @@
 #include <pthread.h>
 #include "hook.h"
 #include "zygisk.hpp"
+#include "il2cpp.h"
+#include "xdl.h"
+
 
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;
