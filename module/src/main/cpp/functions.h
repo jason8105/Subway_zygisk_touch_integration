@@ -1,52 +1,35 @@
 #ifndef ZYCHEATS_SGUYS_FUNCTIONS_H
 #define ZYCHEATS_SGUYS_FUNCTIONS_H
 
-// Required Headers
 #include <jni.h>
-#include <android/log.h> // FIX: Standard Android log (no need for a custom log.h file)
+#include <android/log.h>
 #include <dobby.h>
 #include "il2cpp.h"
 #include "il2cpp_hook.h"
 #include "xdl.h"
 
-// Define LOGW directly so it works without log.h
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, "ModMenu", __VA_ARGS__)
-
-// Variables for the cheats
+// Restored variables so menu.h compiles without errors
+bool addCurrency = false, freeItems = false, everythingUnlocked = false, showAllItems = false, addSkins = false;
 bool stopZ = false; // Free Shopping toggle
 
-void Pointers() {
-    // Left empty: add future pointers here
-}
-
-void Patches() {
-    // Left empty: add future patches here
-}
+void Pointers() {}
+void Patches() {}
 
 // Free Shopping Hook (Stop Zombie)
 bool (*_stopZombie)(void *thisObj);
 bool StopZombie(void *thisObj) {
-    if (stopZ) {
-        return false; // Returns false when the Free Shopping cheat is enabled
-    }
+    if (stopZ) return false;
     return _stopZombie(thisObj);
 }
 
 void Hooks() {
-    // Dynamically fetch and hook get_IsIAP using il2cpp features
-    auto get_isIAP = IL2Cpp::Il2CppGetMethodOffset(
-        "SYBO.Subway.Core.CommonData.dll", 
-        "SYBO.Subway.Core.CommonData", 
-        "Currency", 
-        "get_IsIAP", 
-        0
-    );
+    // FIX: Using the correct namespace 'IL2CPP' and standard method 'GetMethodOffset'
+    auto get_isIAP = IL2CPP::GetMethodOffset("SYBO.Subway.Core.CommonData.dll", "SYBO.Subway.Core.CommonData", "Currency", "get_IsIAP", 0);
     
-    if (get_isIAP != 0) { // Safety check to ensure the method was found
+    if (get_isIAP != 0) {
         DobbyHook((void *)get_isIAP, (void *)StopZombie, (void **)&_stopZombie);
     } else {
         LOGW("Failed to find get_IsIAP offset!");
     }
 }
-
 #endif //ZYCHEATS_SGUYS_FUNCTIONS_H
