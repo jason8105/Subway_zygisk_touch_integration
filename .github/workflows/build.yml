@@ -28,13 +28,19 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :module:assembleRelease
 
-      - name: Prepare Artifact
+      - name: Create Proper Magisk Structure
         run: |
-          mkdir -p final_release
-          cp out/*.zip final_release/ || find module/build -name "*.zip" -exec cp {} final_release/ \;
+          mkdir -p final_package
+          # Locate the built zip from Gradle output and ensure it is structured for Magisk
+          cd out/
+          unzip -q *.zip -d ../temp_extracted
+          cd ../temp_extracted
+          
+          # Zip up the contents directly so module.prop is at the root
+          zip -r ../final_package/Subway-ImGui-Installable.zip .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zygisk-ImGui-Release
-          path: final_release/*.zip
+          name: Subway-ImGui-Installable
+          path: final_package/*.zip
