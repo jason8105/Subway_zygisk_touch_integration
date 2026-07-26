@@ -1,56 +1,46 @@
 #ifndef ZYCHEATS_SGUYS_FUNCTIONS_H
 #define ZYCHEATS_SGUYS_FUNCTIONS_H
 
-// here you can define variables for the patches
-bool addCurrency, freeItems, everythingUnlocked, showAllItems, addSkins;
+// Required Headers
+#include "il2cpp.h"
+#include "il2cpp_hook.h"
+#include "xdl.h"
 
-monoString *CreateIl2cppString(const char *str) {
-    monoString *(*String_CreateString)(void *instance, const char *str) = (monoString*(*)(void*, const char*)) (g_il2cppBaseMap.startAddress + string2Offset(OBFUSCATE("0x2596B20")));
-    return String_CreateString(NULL, str);
-}
-
-void (*PurchaseRealMoney) (void* instance, monoString* itemId, monoString* receipt, void* callback);
+// Variables for the cheats
+bool stopZ = false; // Free Shopping toggle
 
 void Pointers() {
-    PurchaseRealMoney = (void(*)(void*, monoString*, monoString*, void*)) (g_il2cppBaseMap.startAddress + string2Offset(OBFUSCATE("0xE7AADC")));
+    // Left empty: add future pointers here
 }
 
 void Patches() {
-    PATCH_SWITCH("0x10A69A0", "200080D2C0035FD6", showAllItems);
-    PATCH_SWITCH("0xF148A4", "E07C80D2C0035FD6", freeItems);
+    // Left empty: add future patches here
 }
 
-// declare your hooks here
-void (*old_Backend)(void *instance);
-void Backend(void *instance) {
-    if (instance != NULL) {
-        if (addCurrency) {
-            LOGW("Calling Purchase");
-            PurchaseRealMoney(instance, CreateIl2cppString("special_offer1"), CreateIl2cppString("dev"), NULL);
-            addCurrency = false;
-        }
-        if (addSkins) {
-            LOGW("Calling Skins");
-            addSkins = false;
-        }
+// Free Shopping Hook (Stop Zombie)
+bool (*_stopZombie)(void *thisObj);
+bool StopZombie(void *thisObj) {
+    if (stopZ) {
+        return false; // Returns false when the Free Shopping cheat is enabled
     }
-    return old_Backend(instance);
-}
-
-void* (*old_ProductDefinition)(void *instance, monoString* id, monoString* storeSpecificId, int type, bool enabled, void* payouts);
-void* ProductDefinition(void *instance, monoString* id, monoString* storeSpecificId, int type, bool enabled, void* payouts) {
-    if (instance != NULL) {
-        LOGW("Called ProductDefinition! Here are the parameters:");
-        LOGW("id: %s", id->getChars());
-        LOGW("storeSpecificId: %s", storeSpecificId->getChars());
-        LOGW("type: %i", type);
-    }
-    return old_ProductDefinition(instance, id, storeSpecificId, type, enabled, payouts);
+    return _stopZombie(thisObj);
 }
 
 void Hooks() {
-    HOOK("0xE7BC74", Backend, old_Backend);
-    HOOK("0x29DA08C", ProductDefinition, old_ProductDefinition);
+    // Dynamically fetch and hook get_IsIAP using il2cpp features
+    auto get_isIAP = IL2Cpp::Il2CppGetMethodOffset(
+        "SYBO.Subway.Core.CommonData.dll", 
+        "SYBO.Subway.Core.CommonData", 
+        "Currency", 
+        "get_IsIAP", 
+        0
+    );
+    
+    if (get_isIAP != 0) { // Safety check to ensure the method was found
+        DobbyHook((void *)get_isIAP, (void *)StopZombie, (void **)&_stopZombie);
+    } else {
+        LOGW("Failed to find get_IsIAP offset!");
+    }
 }
 
 #endif //ZYCHEATS_SGUYS_FUNCTIONS_H
