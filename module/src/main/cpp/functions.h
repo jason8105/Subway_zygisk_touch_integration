@@ -2,9 +2,15 @@
 #define ZYCHEATS_SGUYS_FUNCTIONS_H
 
 // Required Headers
+#include <jni.h>
+#include <android/log.h> // FIX: Standard Android log (no need for a custom log.h file)
+#include <dobby.h>
 #include "il2cpp.h"
 #include "il2cpp_hook.h"
 #include "xdl.h"
+
+// Define LOGW directly so it works without log.h
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, "ModMenu", __VA_ARGS__)
 
 // Variables for the cheats
 bool stopZ = false; // Free Shopping toggle
