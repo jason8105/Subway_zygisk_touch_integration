@@ -24,7 +24,7 @@ bool StopZombie(void *thisObj) {
 }
 
 void Hooks() {
-    // 1. Initialize IL2CPP Framework (Populates API pointers so PC doesn't crash at 0x0)
+    // 1. Initialize IL2CPP Framework (Keep this for all IL2CPP games)
     if (!IL2CPP::il2cpp_base) {
         if (!IL2CPP::Init()) {
             LOGW("IL2CPP Init failed. Is libil2cpp.so loaded?");
@@ -32,7 +32,7 @@ void Hooks() {
         }
     }
     
-    // 2. Setup the Domain
+    // 2. Setup the Domain (Keep this for all IL2CPP games)
     if (!IL2CPP::domain) {
         IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
         if (!IL2CPP::domain) {
@@ -41,6 +41,9 @@ void Hooks() {
         }
     }
 
+/* ====================================================================
+ * SUBWAY SURFERS SPECIFIC HOOK (COMMENTED OUT TO PREVENT CRASHES)
+ * ====================================================================
     // 3. Get the DLL Image
     Il2CppImage* image = IL2CPP::GetImage("SYBO.Subway.Core.CommonData.dll");
     if (image != nullptr) {
@@ -62,6 +65,7 @@ void Hooks() {
     } else {
         LOGW("Failed to find SYBO.Subway.Core.CommonData.dll!");
     }
+ * ==================================================================== */
 }
 
 #endif //ZYCHEATS_SGUYS_FUNCTIONS_H
