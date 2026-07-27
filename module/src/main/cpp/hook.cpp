@@ -31,7 +31,7 @@
 #include "Rect.h"
 #include <fstream>
 #include <limits>
-#define GamePackageName "com.kiloo.subwaysurf" // define the game package name here please
+#define GamePackageName "com.innersloth.spacemafia" // define the game package name here please
 
 int glHeight, glWidth;
 
