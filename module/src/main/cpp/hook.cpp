@@ -34,30 +34,25 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
-#define GamePackageName "com.innersloth.spacemafia"
+#define GamePackageName "com.kiloo.subwaysurf"
 
 // Global State
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
-// ❌ REMOVED: bool menuVisible = true; (Ab sirf menu.cpp mein rahega)
 
-// Dobby Input Stubs
-typedef void (*InputFn)(void*, void*, void*);
-InputFn origInput = nullptr;
-typedef int32_t (*ConsumeFn)(void*, void*, bool, long, uint32_t*, AInputEvent**);
-ConsumeFn origConsume = nullptr;
+// --- Safe Input Stubs ---
+// Hum InputConsumer ko hook nahi kar rahe (wo crash karta hai), 
+// hum sirf AInputQueue_getEvent ko hook karenge.
+typedef int (*AInputQueue_getEvent_t)(AInputQueue* queue, AInputEvent** outEvent);
+AInputQueue_getEvent_t orig_AInputQueue_getEvent = nullptr;
 
-// Input Hook Handlers
-void myInput(void *thiz, void *ex_ab, void *ex_ac) {
-    if (origInput) origInput(thiz, ex_ab, ex_ac);
-    ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)thiz);
-}
-
-int32_t myConsume(void *thiz, void *arg1, bool arg2, long arg3, uint32_t *arg4, AInputEvent **input_event) {
-    int32_t result = 0;
-    if (origConsume) result = origConsume(thiz, arg1, arg2, arg3, arg4, input_event);
-    if (result != 0 || !input_event || !*input_event) return result;
-    ImGui_ImplAndroid_HandleInputEvent(*input_event);
+// Input Hook Handler (Simple & Safe)
+int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
+    int result = orig_AInputQueue_getEvent(queue, outEvent);
+    if (result >= 0 && *outEvent != nullptr) {
+        // Direct handle to ImGui
+        ImGui_ImplAndroid_HandleInputEvent(*outEvent);
+    }
     return result;
 }
 
@@ -76,8 +71,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
-    // Draw Menu
-    if (menuVisible) RenderMenu();
+    // ✅ Safety Check: menuVisible check
+    if (menuVisible) {
+        RenderMenu();
+    }
 
     ImGui::Render();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
@@ -112,17 +109,15 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 }
 
 // Main Hook Thread
-// Main Hook Thread
 void *hack_thread(void *arg) {
     // Wait for libil2cpp.so
     do {
         sleep(1);
-        // ✅ Use actual API from KittyMemory.h
         KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
         
         if (il2cppMap.isValid()) {
             uintptr_t il2cppBase = static_cast<uintptr_t>(il2cppMap.startAddress);
-            g_il2cppBaseMap = il2cppMap; // Global ProcMap assign
+            g_il2cppBaseMap = il2cppMap;
             KITTY_LOGI("il2cpp base: %p", (void*)il2cppBase);
             break;
         }
@@ -131,7 +126,7 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // Hook eglSwapBuffers (Unity Render Loop)
+    // 1. Hook eglSwapBuffers (Render)
     auto eglhandle = dlopen("libunity.so", RTLD_LAZY);
     if (eglhandle) {
         auto eglSwapBuffers = dlsym(eglhandle, "eglSwapBuffers");
@@ -141,23 +136,17 @@ void *hack_thread(void *arg) {
         }
     }
 
-    // --- FIXED: Safe Input Hook Only ---
-    // Humein InputConsumer ko hook karne ki zaroorat nahi hai, wo crash karta hai.
-    // Hum sirf AInputQueue_getEvent ko hook karenge jo safe hai.
-
-    // 1. Try libinput.so for 64-bit devices (Android 9+)
-    void *sym_input = DobbySymbolResolver("/system/lib64/libinput.so", "AInputQueue_getEvent");
-    
-    // Fallback for 32-bit or older devices
-    if (!sym_input) {
-        sym_input = DobbySymbolResolver("/system/lib/libinput.so", "AInputQueue_getEvent");
-    }
-
-    if (sym_input) {
-        DobbyHook(sym_input, (void*)myConsume, (void**)&origConsume);
-        LOGI("Safe InputHook (AInputQueue) hooked!");
-    } else {
-        LOGE("Failed to resolve AInputQueue symbol!");
+    // 2. Hook AInputQueue (Input) - Safer than InputConsumer
+    void *libAndroid = dlopen("libandroid.so", RTLD_LAZY);
+    if (libAndroid) {
+        // Try to find the symbol
+        void *symInput = dlsym(libAndroid, "AInputQueue_getEvent");
+        if (symInput) {
+            DobbyHook(symInput, (void *)hooked_AInputQueue_getEvent, (void **)&orig_AInputQueue_getEvent);
+            LOGI("AInputQueue_getEvent hooked!");
+        } else {
+            LOGE("Failed to find AInputQueue_getEvent!");
+        }
     }
 
     LOGI("Hook thread completed successfully!");
