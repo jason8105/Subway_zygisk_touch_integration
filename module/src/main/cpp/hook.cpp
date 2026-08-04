@@ -70,8 +70,8 @@ int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
             int32_t action = AMotionEvent_getAction(*outEvent);
             int32_t actionMasked = action & AMOTION_EVENT_ACTION_MASK;
             
-            // Use safe standard NDK function to get the pointer index
-            int32_t pointerIndex = AMotionEvent_getActionIndex(*outEvent);
+            // Extract pointer index safely using standard action bits
+            int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
 
             float rawX = AMotionEvent_getX(*outEvent, pointerIndex);
             float rawY = AMotionEvent_getY(*outEvent, pointerIndex);
