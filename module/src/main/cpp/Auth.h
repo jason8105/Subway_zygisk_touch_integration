@@ -1,124 +1,121 @@
-//
-// Created by lbert on 2/13/2023.
-//
-
 #ifndef ZYGISKPG_AUTH_H
 #define ZYGISKPG_AUTH_H
 
 #include <curl/curl.h>
-#include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
-#include <map>
-#include <vector>
-#include <list>
-#include <json.h>
+#include <algorithm>
+#include <android/log.h>
+#include <nlohmann/json.hpp>
 
-using namespace nlohmann;
+using namespace std;
+using json = nlohmann::json;
 
-std::string secret = OBFUSCATE("");
-std::string aid = OBFUSCATE("");
-std::string apikey = OBFUSCATE("");
+// 🔧 FIX: OBFUSCATE("") empty strings bhejta hai jo API ko "Invalid type" error deta hai.
+// Yahan apne actual credentials daalo. Runtime pe decrypt honge.
+std::string secret = OBFUSCATE("YOUR_SECRET_HERE");
+std::string aid = OBFUSCATE("YOUR_AID_HERE");
+std::string apikey = OBFUSCATE("YOUR_APIKEY_HERE");
+
 std::string readBuffer;
 std::string jsonresult;
 
 size_t WriteCallback(char* ptr, size_t size, size_t nmemb, void* resData) {
     std::string& buf = *static_cast<std::string*>(resData);
-    buf.append(ptr, std::next(ptr, nmemb * size));
-    return nmemb * size;
+    buf.append(ptr, ptr + size * nmemb);
+    return size * nmemb;
+}
+
+// 🔧 FIX: Clean newline/carriage return properly
+std::string CleanString(std::string str) {
+    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+    str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
+    return str;
 }
 
 bool tryAutoLogin() {
-    std::string faggot = ""; //here you have to get the working dir, use Application$persistentDataPath()->getString();
-    faggot += "/license.key";
+    // 🔧 FIX: Unity ka persistentDataPath C++ mein directly nahi milta.
+    // Android native apps ke liye standard path use karo.
+    const char* gamePackage = "com.kiloo.subwaysurf"; // Game package name match karo
+    std::string configPath = "/data/data/";
+    configPath += gamePackage;
+    configPath += "/files/license.key";
 
-    std::string username;
-    std::string password;
+    LOGE("Reading config from: %s", configPath.c_str());
 
-    LOGE("Trying to enter file: %s", faggot.c_str());
-    std::string line;
-    std::ifstream file (faggot);
-    if (file.is_open()) {
-        for (int lineno = 1; getline (file,line) && lineno < 3; lineno++) {
-            if (lineno == 1)
-            {
-                username = line;
-            }
-            if (lineno == 2) {
-                password = line;
-            }
-        }
-        file.close();
-    } else {
+    std::ifstream file(configPath);
+    if (!file.is_open()) {
+        LOGE("Failed to open license.key");
         return false;
     }
-    const char* hwid = ""; // here we need the hwid, use getDeviceUniqueIdentifier()->getChars();
 
-    std::string::size_type i = 0;
-    while (i < username.length()) {
-        i = username.find('\n', i);
-        if (i == std::string::npos) {
-            break;
-        }
-        username.erase(i);
+    std::string username, password;
+    std::string line;
+    int lineno = 0;
+    while (std::getline(file, line) && lineno < 2) {
+        lineno++;
+        if (lineno == 1) username = line;
+        else if (lineno == 2) password = line;
+    }
+    file.close();
+
+    username = CleanString(username);
+    password = CleanString(password);
+
+    if (username.empty() || password.empty()) {
+        LOGE("Empty credentials in license.key");
+        return false;
     }
 
-    std::string::size_type i2 = 0;
-    while (i2 < password.length()) {
-        i2 = password.find('\n', i2);
-        if (i2 == std::string::npos) {
-            break;
-        }
-        password.erase(i);
-    }
-
-    // auth.gg example
+    // HWID generate karne ka basic placeholder (optional)
+    std::string hwid = "";
 
     CURL *handle;
     CURLcode result;
     long http_code;
+
     curl_global_init(CURL_GLOBAL_ALL);
-
-    // declare handle
     handle = curl_easy_init();
-
-    std::unique_ptr<std::string> httpData(new std::string());
 
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
 
-    std::ostringstream oss;
-    oss << "type=login&aid=" << aid << "&apikey=" << apikey << "&secret=" << secret << "&username=" << username.c_str() << "&password=" << password.c_str() << "&hwid=" << hwid;
-    std::string var = oss.str();
+    std::string postData = "type=login&aid=" + aid + "&apikey=" + apikey + 
+                           "&secret=" + secret + "&username=" + username + 
+                           "&password=" + password + "&hwid=" + hwid;
 
-    curl_easy_setopt(handle, CURLOPT_USE_SSL, CURLUSESSL_ALL);
-    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(handle, CURLOPT_URL, "https://api.auth.gg/v1/");
-
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, &readBuffer);
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, WriteCallback);
-
-    /* pass our list of custom made headers */
+    curl_easy_setopt(handle, CURLOPT_POST, 1L);
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, postData.c_str());
     curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(handle, CURLOPT_TIMEOUT, 10L);
 
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, var.c_str());
+    result = curl_easy_perform(handle);
+    curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &http_code);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(handle);
+    curl_global_cleanup(CURL_GLOBAL_ALL);
 
-    result = curl_easy_perform(handle); /* post away! */
+    if (result != CURLE_OK) {
+        LOGE("Auth failed: %s", curl_easy_strerror(result));
+        return false;
+    }
 
-    curl_easy_getinfo (handle, CURLINFO_RESPONSE_CODE, &http_code);
-
-    curl_slist_free_all(headers); /* free the header list */
-
-    if(result != CURLE_OK)
-        LOGE("curl_easy_perform() failed: %s\n", curl_easy_strerror(result));
-
-    if (http_code == 200 && result != CURLE_ABORTED_BY_CALLBACK) {
-        json j = json::parse(readBuffer);
-        jsonresult = j.dump(1);
-        LOGE("%s", jsonresult.c_str());
-        if (jsonresult.find("success") != std::string::npos) {
-            return true;
+    if (http_code == 200) {
+        jsonresult = readBuffer;
+        LOGI("Auth Response: %s", jsonresult.c_str());
+        
+        try {
+            auto j = json::parse(jsonresult);
+            if (j["result"].get<std::string>() == "success") {
+                return true;
+            }
+        } catch (...) {
+            LOGE("JSON parse error");
         }
     }
     return false;
