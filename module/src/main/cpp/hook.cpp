@@ -34,6 +34,7 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
+// ✅ Package Name Correct Hai (Among Us)
 #define GamePackageName "com.innersloth.spacemafia"
 
 // Global State
@@ -41,16 +42,18 @@ int glHeight = 0, glWidth = 0;
 bool setupimg = false;
 
 // --- Safe Input Stubs ---
-// Hum InputConsumer ko hook nahi kar rahe (wo crash karta hai), 
-// hum sirf AInputQueue_getEvent ko hook karenge.
 typedef int (*AInputQueue_getEvent_t)(AInputQueue* queue, AInputEvent** outEvent);
 AInputQueue_getEvent_t orig_AInputQueue_getEvent = nullptr;
 
-// Input Hook Handler (Simple & Safe)
+// Input Hook Handler (Safe version)
 int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
-    int result = orig_AInputQueue_getEvent(queue, outEvent);
+    int result = 0;
+    // ✅ FIX: Check if original function is valid before calling
+    if (orig_AInputQueue_getEvent) {
+        result = orig_AInputQueue_getEvent(queue, outEvent);
+    }
+    
     if (result >= 0 && *outEvent != nullptr) {
-        // Direct handle to ImGui
         ImGui_ImplAndroid_HandleInputEvent(*outEvent);
     }
     return result;
@@ -59,28 +62,52 @@ int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 // EGL Swap Buffers Hook (Render Loop)
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    // ✅ FIX: Check if display/surface is valid
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
+        return 0;
+    }
+
     if (!setupimg) {
-        eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
-        eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
-        InitMenu();
-        setupimg = true;
+        // Ensure surface is valid before querying dimensions
+        EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
+        EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
+
+        // Only init if we got valid dimensions
+        if (w && h && (glWidth > 0 && glHeight > 0)) {
+            InitMenu();
+            setupimg = true;
+            LOGI("Menu Init OK | GL: %dx%d", glWidth, glHeight);
+        }
     }
 
     ImGuiIO &io = ImGui::GetIO();
+    
+    // ✅ FIX: Ensure valid display size to avoid crash
+    if (glWidth > 0 && glHeight > 0) {
+        io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
+    }
+    
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
-    // ✅ Safety Check: menuVisible check
+    // Safety Check for menu
     if (menuVisible) {
         RenderMenu();
     }
 
     ImGui::Render();
-    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    glViewport(0, 0, glWidth, glHeight);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Clear background
+    glClear(GL_COLOR_BUFFER_BIT);
+
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    return old_eglSwapBuffers(dpy, surface);
+    // ✅ FIX: Check if old function exists before calling (This was the crash cause)
+    if (old_eglSwapBuffers) {
+        return old_eglSwapBuffers(dpy, surface);
+    }
+    return 0;
 }
 
 // Game Detection
@@ -89,6 +116,7 @@ int isGame(JNIEnv *env, jstring appDataDir) {
     const char *app_data_dir = env->GetStringUTFChars(appDataDir, nullptr);
     int user = 0;
     static char package_name[256];
+    
     if (sscanf(app_data_dir, "/data/%*[^/]/%d/%s", &user, package_name) != 2) {
         if (sscanf(app_data_dir, "/data/%*[^/]/%s", package_name) != 1) {
             package_name[0] = '\0';
@@ -126,20 +154,34 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // 1. Hook eglSwapBuffers (Render)
-    auto eglhandle = dlopen("libunity.so", RTLD_LAZY);
+    // 1. Hook eglSwapBuffers (Render) - Robust Search
+    void *eglhandle = dlopen("libunity.so", RTLD_LAZY);
+    void *symEgl = NULL;
+    
     if (eglhandle) {
-        auto eglSwapBuffers = dlsym(eglhandle, "eglSwapBuffers");
-        if (eglSwapBuffers) {
-            DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-            LOGI("eglSwapBuffers hooked!");
+        symEgl = dlsym(eglhandle, "eglSwapBuffers");
+        if (!symEgl) dlclose(eglhandle);
+    }
+    
+    // Fallback: Some Unity builds have it in libEGL.so
+    if (!symEgl) {
+        eglhandle = dlopen("libEGL.so", RTLD_LAZY);
+        if (eglhandle) {
+            symEgl = dlsym(eglhandle, "eglSwapBuffers");
+            // Don't close dlhandle if we are hooking it, Dobby needs it
         }
+    }
+
+    if (symEgl) {
+        DobbyHook(symEgl, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
+        LOGI("eglSwapBuffers hooked!");
+    } else {
+        LOGE("Failed to find eglSwapBuffers!");
     }
 
     // 2. Hook AInputQueue (Input) - Safer than InputConsumer
     void *libAndroid = dlopen("libandroid.so", RTLD_LAZY);
     if (libAndroid) {
-        // Try to find the symbol
         void *symInput = dlsym(libAndroid, "AInputQueue_getEvent");
         if (symInput) {
             DobbyHook(symInput, (void *)hooked_AInputQueue_getEvent, (void **)&orig_AInputQueue_getEvent);
@@ -151,4 +193,4 @@ void *hack_thread(void *arg) {
 
     LOGI("Hook thread completed successfully!");
     return nullptr;
-}
+}   
