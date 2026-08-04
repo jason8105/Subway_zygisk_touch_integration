@@ -34,26 +34,42 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
-// ✅ Package Name (Among Us)
+// ✅ Correct Package Name for Among Us
 #define GamePackageName "com.innersloth.spacemafia"
 
 // Global State
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
 
+// --- Safe Input Stubs ---
+typedef int (*AInputQueue_getEvent_t)(AInputQueue* queue, AInputEvent** outEvent);
+AInputQueue_getEvent_t orig_AInputQueue_getEvent = nullptr;
+
+// Input Hook Handler (Safe version)
+int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
+    int result = 0;
+    // ✅ FIX: Check if original function is valid before calling
+    if (orig_AInputQueue_getEvent) {
+        result = orig_AInputQueue_getEvent(queue, outEvent);
+    }
+    
+    if (result >= 0 && *outEvent != nullptr) {
+        ImGui_ImplAndroid_HandleInputEvent(*outEvent);
+    }
+    return result;
+}
+
 // EGL Swap Buffers Hook (Render Loop)
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
-
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ FIX: Ensure we have a valid context before doing anything
-    EGLContext context = eglGetCurrentContext();
-    if (context == EGL_NO_CONTEXT || dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
+    // ✅ FIX 1: Strict Null Check to prevent UnityGfxDeviceW crash
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return 0;
     }
 
     if (!setupimg) {
-        // ✅ FIX: Query surface safely only once at startup
+        // ✅ FIX 2: Initialize Menu ONLY if valid surface exists
         EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
         EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
@@ -66,7 +82,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     ImGuiIO &io = ImGui::GetIO();
     
-    // ✅ FIX: Ensure valid display size
+    // ✅ FIX 3: Ensure valid display size
     if (glWidth > 0 && glHeight > 0) {
         io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
     }
@@ -86,7 +102,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    // ✅ FIX: Safe call to original function
+    // ✅ FIX 4: Safe call to original function
     if (old_eglSwapBuffers) {
         return old_eglSwapBuffers(dpy, surface);
     }
@@ -137,26 +153,31 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ FIX: Hook from libEGL.so (Correct Library)
+    // ✅ FIX 5: Hook from libEGL.so (Correct Library)
     void *eglhandle = dlopen("libEGL.so", RTLD_LAZY);
     void *symEgl = NULL;
     
     if (eglhandle) {
         symEgl = dlsym(eglhandle, "eglSwapBuffers");
-        // Do not close handle, Dobby needs it
+        // Do not close handle here, we need Dobby to access it
     }
     
     if (symEgl) {
-        // Use extern "C" signature for safety on Android
         DobbyHook(symEgl, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
         LOGI("eglSwapBuffers hooked from libEGL!");
     } else {
         LOGE("Failed to find eglSwapBuffers in libEGL!");
     }
 
-    // ❌ REMOVED: Input Hook (AInputQueue_getEvent)
-    // Input hook was causing the libil2cpp crash (0x135) which cascaded to render crash.
-    // We rely on ImGui internal touch handling now.
+    // 2. Hook AInputQueue (Input) - Safer than InputConsumer
+    void *libAndroid = dlopen("libandroid.so", RTLD_LAZY);
+    if (libAndroid) {
+        void *symInput = dlsym(libAndroid, "AInputQueue_getEvent");
+        if (symInput) {
+            DobbyHook(symInput, (void *)hooked_AInputQueue_getEvent, (void **)&orig_AInputQueue_getEvent);
+            LOGI("AInputQueue_getEvent hooked!");
+        }
+    }
 
     LOGI("Hook thread completed successfully!");
     return nullptr;
