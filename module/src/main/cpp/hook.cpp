@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <sys/system_properties.h>
 #include <dlfcn.h>
-#include <dlfcn.h>
 #include <cstdlib>
 #include <cinttypes>
 #include <string>
@@ -12,6 +11,8 @@
 #include <fstream>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
+#include <android/input.h>
+#include <android/native_window.h>
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -25,15 +26,11 @@
 #include "Misc.h"
 #include "hook.h"
 #include "Include/Roboto-Regular.h"
-#include <iostream>
-#include <chrono>
-#include "Include/Quaternion.h"
-#include "Rect.h"
-#include <fstream>
-#include <limits>
-#define GamePackageName "com.innersloth.spacemafia" // define the game package name here please
+#define GamePackageName "com.innersloth.spacemafia" // Define your package name here
 
-int glHeight, glWidth;
+int glHeight = 0, glWidth = 0;
+int32_t screenWidth = 0;
+int32_t screenHeight = 0;
 
 int isGame(JNIEnv *env, jstring appDataDir)
 {
@@ -61,20 +58,49 @@ int isGame(JNIEnv *env, jstring appDataDir)
     }
 }
 
-bool setupimg;
+bool setupimg = false;
 
-HOOKAF(void, Input, void *thiz, void *ex_ab, void *ex_ac)
-{
-    origInput(thiz, ex_ab, ex_ac);
-    ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)thiz);
-    return;
-}
+// --- Dobby Touch & Resolution Hooks ---
+int (*orig_AInputQueue_getEvent)(AInputQueue* queue, AInputEvent** outEvent);
+int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
+    int result = orig_AInputQueue_getEvent(queue, outEvent);
+    if (result >= 0 && *outEvent != nullptr) {
+        int32_t type = AInputEvent_getType(*outEvent);
+        if (type == AINPUT_EVENT_TYPE_MOTION) {
+            int32_t action = AMotionEvent_getAction(*outEvent) & AMOTION_EVENT_ACTION_MASK;
+            int32_t pointerIndex = (AMotionEvent_getAction(*outEvent) & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+                >> AMotionEvent_ACTION_POINTER_INDEX_SHIFT;
 
-HOOKAF(int32_t, Consume, void *thiz, void *arg1, bool arg2, long arg3, uint32_t *arg4, AInputEvent **input_event)
-{
-    auto result = origConsume(thiz, arg1, arg2, arg3, arg4, input_event);
-    if(result != 0 || *input_event == nullptr) return result;
-    ImGui_ImplAndroid_HandleInputEvent(*input_event);
+            float rawX = AMotionEvent_getX(*outEvent, pointerIndex);
+            float rawY = AMotionEvent_getY(*outEvent, pointerIndex);
+            
+            // Fallback screen dimensions if native window dimensions aren't fetched yet
+            float targetScreenWidth = screenWidth > 0 ? (float)screenWidth : (float)glWidth;
+            float targetScreenHeight = screenHeight > 0 ? (float)screenHeight : (float)glHeight;
+
+            float scaledX = (rawX * (float)glWidth) / targetScreenWidth;
+            float scaledY = (rawY * (float)glHeight) / targetScreenHeight;
+
+            ImGuiIO& io = ImGui::GetIO();
+            switch (action) {
+                case AMOTION_EVENT_ACTION_DOWN:
+                case AMOTION_EVENT_ACTION_POINTER_DOWN:
+                    io.MousePos = ImVec2(scaledX, scaledY);
+                    io.MouseDown[0] = true;
+                    break;
+                case AMOTION_EVENT_ACTION_UP:
+                case AMOTION_EVENT_ACTION_POINTER_UP:
+                    io.MousePos = ImVec2(scaledX, scaledY);
+                    io.MouseDown[0] = false;
+                    break;
+                case AMOTION_EVENT_ACTION_MOVE:
+                    io.MousePos = ImVec2(scaledX, scaledY);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
     return result;
 }
 
@@ -86,22 +112,32 @@ void *hack_thread(void *arg) {
         sleep(1);
         g_il2cppBaseMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
     } while (!g_il2cppBaseMap.isValid());
+    
     KITTY_LOGI("il2cpp base: %p", (void*)(g_il2cppBaseMap.startAddress));
     Pointers();
     Hooks();
-    auto eglhandle = dlopen("libunity.so", RTLD_LAZY);
-    auto eglSwapBuffers = dlsym(eglhandle, "eglSwapBuffers");
-    DobbyHook((void*)eglSwapBuffers,(void*)hook_eglSwapBuffers,
-              (void**)&old_eglSwapBuffers);
-    void *sym_input = DobbySymbolResolver(("/system/lib/libinput.so"), ("_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE"));
-    if (NULL != sym_input) {
-        DobbyHook(sym_input,(void*)myInput,(void**)&origInput);
-    } else {
-        sym_input = DobbySymbolResolver(("/system/lib/libinput.so"), ("_ZN7android13InputConsumer7consumeEPNS_26InputEventFactoryInterfaceEblPjPPNS_10InputEventE"));
-        if(NULL != sym_input) {
-            DobbyHook(sym_input,(void *) myConsume,(void **) &origConsume);
+
+    // Hook eglSwapBuffers via Dobby
+    auto eglhandle = dlopen("libEGL.so", RTLD_LAZY);
+    if (eglhandle) {
+        auto eglSwapBuffersSym = dlsym(eglhandle, "eglSwapBuffers");
+        if (eglSwapBuffersSym) {
+            DobbyHook((void*)eglSwapBuffersSym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
         }
     }
-    LOGI("Draw Done!");
+
+    // Hook AInputQueue_getEvent via Dobby (Stable NDK Touch Fix)
+    void *libAndroid = dlopen("libandroid.so", RTLD_LAZY);
+    if (libAndroid) {
+        void *symEvent = dlsym(libAndroid, "AInputQueue_getEvent");
+        if (symEvent) {
+            DobbyHook(symEvent, (void *)hooked_AInputQueue_getEvent, (void **)&orig_AInputQueue_getEvent);
+            LOGI("Dobby successfully hooked AInputQueue_getEvent!");
+        } else {
+            LOGE("Failed to resolve AInputQueue_getEvent symbol!");
+        }
+    }
+
+    LOGI("Draw & Touch Hooks Setup Done!");
     return nullptr;
 }
