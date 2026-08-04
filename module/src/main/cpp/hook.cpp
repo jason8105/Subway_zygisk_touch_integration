@@ -112,6 +112,7 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 }
 
 // Main Hook Thread
+// Main Hook Thread
 void *hack_thread(void *arg) {
     // Wait for libil2cpp.so
     do {
@@ -140,17 +141,23 @@ void *hack_thread(void *arg) {
         }
     }
 
-    // Hook Android InputSystem (64-bit fallback to 32-bit)
-    void *sym_input = DobbySymbolResolver("/system/lib64/libinput.so", "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE");
-    if (!sym_input) sym_input = DobbySymbolResolver("/system/lib64/libinput.so", "_ZN7android13InputConsumer7consumeEPNS_26InputEventFactoryInterfaceEblPjPPNS_10InputEventE");
-    if (!sym_input) sym_input = DobbySymbolResolver("/system/lib/libinput.so", "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE");
-    if (!sym_input) sym_input = DobbySymbolResolver("/system/lib/libinput.so", "_ZN7android13InputConsumer7consumeEPNS_26InputEventFactoryInterfaceEblPjPPNS_10InputEventE");
+    // --- FIXED: Safe Input Hook Only ---
+    // Humein InputConsumer ko hook karne ki zaroorat nahi hai, wo crash karta hai.
+    // Hum sirf AInputQueue_getEvent ko hook karenge jo safe hai.
+
+    // 1. Try libinput.so for 64-bit devices (Android 9+)
+    void *sym_input = DobbySymbolResolver("/system/lib64/libinput.so", "AInputQueue_getEvent");
+    
+    // Fallback for 32-bit or older devices
+    if (!sym_input) {
+        sym_input = DobbySymbolResolver("/system/lib/libinput.so", "AInputQueue_getEvent");
+    }
 
     if (sym_input) {
         DobbyHook(sym_input, (void*)myConsume, (void**)&origConsume);
-        LOGI("InputConsumer hooked!");
+        LOGI("Safe InputHook (AInputQueue) hooked!");
     } else {
-        LOGE("Failed to resolve InputConsumer symbol!");
+        LOGE("Failed to resolve AInputQueue symbol!");
     }
 
     LOGI("Hook thread completed successfully!");
