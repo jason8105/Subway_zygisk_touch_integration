@@ -34,7 +34,7 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
-// ✅ Package Name Correct Hai (Among Us)
+// ✅ Correct Package Name for Among Us
 #define GamePackageName "com.innersloth.spacemafia"
 
 // Global State
@@ -62,27 +62,27 @@ int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 // EGL Swap Buffers Hook (Render Loop)
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ FIX: Check if display/surface is valid
+    // ✅ FIX 1: Strict Null Check to prevent UnityGfxDeviceW crash
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
+        if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return 0;
     }
 
     if (!setupimg) {
-        // Ensure surface is valid before querying dimensions
+        // ✅ FIX 2: Initialize Menu ONLY if valid surface exists
         EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
         EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
-        // Only init if we got valid dimensions
         if (w && h && (glWidth > 0 && glHeight > 0)) {
             InitMenu();
             setupimg = true;
-            LOGI("Menu Init OK | GL: %dx%d", glWidth, glHeight);
+            LOGI("Menu Init Success | GL: %dx%d", glWidth, glHeight);
         }
     }
 
     ImGuiIO &io = ImGui::GetIO();
     
-    // ✅ FIX: Ensure valid display size to avoid crash
+    // ✅ FIX 3: Ensure valid display size
     if (glWidth > 0 && glHeight > 0) {
         io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
     }
@@ -91,19 +91,18 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
-    // Safety Check for menu
     if (menuVisible) {
         RenderMenu();
     }
 
     ImGui::Render();
     glViewport(0, 0, glWidth, glHeight);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Clear background
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); 
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    // ✅ FIX: Check if old function exists before calling (This was the crash cause)
+    // ✅ FIX 4: Safe call to original function
     if (old_eglSwapBuffers) {
         return old_eglSwapBuffers(dpy, surface);
     }
@@ -146,7 +145,7 @@ void *hack_thread(void *arg) {
         if (il2cppMap.isValid()) {
             uintptr_t il2cppBase = static_cast<uintptr_t>(il2cppMap.startAddress);
             g_il2cppBaseMap = il2cppMap;
-            KITTY_LOGI("il2cpp base: %p", (void*)il2cppBase);
+            LOGI("il2cpp base: %p", (void*)il2cppBase);
             break;
         }
     } while (true);
@@ -154,29 +153,20 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // 1. Hook eglSwapBuffers (Render) - Robust Search
-    void *eglhandle = dlopen("libunity.so", RTLD_LAZY);
+    // ✅ FIX 5: Hook from libEGL.so (Correct Library)
+    void *eglhandle = dlopen("libEGL.so", RTLD_LAZY);
     void *symEgl = NULL;
     
     if (eglhandle) {
         symEgl = dlsym(eglhandle, "eglSwapBuffers");
-        if (!symEgl) dlclose(eglhandle);
+        // Do not close handle here, we need Dobby to access it
     }
     
-    // Fallback: Some Unity builds have it in libEGL.so
-    if (!symEgl) {
-        eglhandle = dlopen("libEGL.so", RTLD_LAZY);
-        if (eglhandle) {
-            symEgl = dlsym(eglhandle, "eglSwapBuffers");
-            // Don't close dlhandle if we are hooking it, Dobby needs it
-        }
-    }
-
     if (symEgl) {
         DobbyHook(symEgl, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-        LOGI("eglSwapBuffers hooked!");
+        LOGI("eglSwapBuffers hooked from libEGL!");
     } else {
-        LOGE("Failed to find eglSwapBuffers!");
+        LOGE("Failed to find eglSwapBuffers in libEGL!");
     }
 
     // 2. Hook AInputQueue (Input) - Safer than InputConsumer
@@ -186,11 +176,9 @@ void *hack_thread(void *arg) {
         if (symInput) {
             DobbyHook(symInput, (void *)hooked_AInputQueue_getEvent, (void **)&orig_AInputQueue_getEvent);
             LOGI("AInputQueue_getEvent hooked!");
-        } else {
-            LOGE("Failed to find AInputQueue_getEvent!");
         }
     }
 
     LOGI("Hook thread completed successfully!");
     return nullptr;
-}   
+}
