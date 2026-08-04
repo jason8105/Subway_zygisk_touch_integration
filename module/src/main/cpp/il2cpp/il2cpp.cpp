@@ -5,7 +5,7 @@
 #include <locale>
 #include <codecvt>
 #include "xdl.h"
-#include "hook.h"
+#include "../hook.h"
 
 static std::string get_method_modifier(uint32_t flags) {
     std::stringstream outPut;
