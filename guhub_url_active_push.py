@@ -1,16 +1,12 @@
 import subprocess
 
-commands = [
-    ["git", "init"],
-    ["git", "branch", "-M", "main"],
-    ["git", "remote", "add", "origin", "https://github.com/jason8105/Subway_zygisk_touch_integration.git"],
-    ["git", "add", "."],
-    ["git", "commit", "-m", "chore: initialize git repository and clean structure for zygisk"],
-    ["git", "push", "-u", "origin", "main", "--force"]
-]
+print("Initializing git and updating remote...")
+subprocess.run(["git", "init"])
+subprocess.run(["git", "branch", "-M", "main"])
+subprocess.run(["git", "remote", "remove", "origin"], stderr=subprocess.DEVNULL)
+subprocess.run(["git", "remote", "add", "origin", "https://github.com/jason8105/Subway_zygisk_touch_integration.git"])
+subprocess.run(["git", "add", "."])
+subprocess.run(["git", "commit", "-m", "feat: update subway zygisk touch integration"])
+subprocess.run(["git", "push", "-u", "origin", "main", "--force"])
 
-for cmd in commands:
-    print(f"Executing: {' '.join(cmd)}")
-    subprocess.run(cmd)
-
-print("Git operations completed!")
+print("Git operations completed successfully!")
