@@ -67,14 +67,15 @@ int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
     if (result >= 0 && *outEvent != nullptr) {
         int32_t type = AInputEvent_getType(*outEvent);
         if (type == AINPUT_EVENT_TYPE_MOTION) {
-            int32_t action = AMotionEvent_getAction(*outEvent) & AMOTION_EVENT_ACTION_MASK;
-            int32_t pointerIndex = (AMotionEvent_getAction(*outEvent) & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
-                >> AMotionEvent_ACTION_POINTER_INDEX_SHIFT;
+            int32_t action = AMotionEvent_getAction(*outEvent);
+            int32_t actionMasked = action & AMOTION_EVENT_ACTION_MASK;
+            
+            // Use safe standard NDK function to get the pointer index
+            int32_t pointerIndex = AMotionEvent_getActionIndex(*outEvent);
 
             float rawX = AMotionEvent_getX(*outEvent, pointerIndex);
             float rawY = AMotionEvent_getY(*outEvent, pointerIndex);
             
-            // Fallback screen dimensions if native window dimensions aren't fetched yet
             float targetScreenWidth = screenWidth > 0 ? (float)screenWidth : (float)glWidth;
             float targetScreenHeight = screenHeight > 0 ? (float)screenHeight : (float)glHeight;
 
@@ -82,7 +83,7 @@ int hooked_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
             float scaledY = (rawY * (float)glHeight) / targetScreenHeight;
 
             ImGuiIO& io = ImGui::GetIO();
-            switch (action) {
+            switch (actionMasked) {
                 case AMOTION_EVENT_ACTION_DOWN:
                 case AMOTION_EVENT_ACTION_POINTER_DOWN:
                     io.MousePos = ImVec2(scaledX, scaledY);
