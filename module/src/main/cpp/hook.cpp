@@ -39,7 +39,7 @@
 // Global State
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
-bool menuVisible = true;
+// ❌ REMOVED: bool menuVisible = true; (Ab sirf menu.cpp mein rahega)
 
 // Dobby Input Stubs
 typedef void (*InputFn)(void*, void*, void*);
@@ -114,7 +114,7 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 // Main Hook Thread
 void *hack_thread(void *arg) {
     // Wait for libil2cpp.so
-do {
+    do {
         sleep(1);
         // ✅ Use actual API from KittyMemory.h
         KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
