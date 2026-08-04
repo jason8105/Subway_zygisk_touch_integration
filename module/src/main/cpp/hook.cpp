@@ -114,11 +114,14 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 // Main Hook Thread
 void *hack_thread(void *arg) {
     // Wait for libil2cpp.so
-    do {
+do {
         sleep(1);
-        uintptr_t il2cppBase = KittyMemory::getBaseAddress("libil2cpp.so");
-        if (il2cppBase != 0) {
-            g_il2cppBaseMap = KittyMemory::getLibraryInfo("libil2cpp.so");
+        // ✅ Use actual API from KittyMemory.h
+        KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
+        
+        if (il2cppMap.isValid()) {
+            uintptr_t il2cppBase = static_cast<uintptr_t>(il2cppMap.startAddress);
+            g_il2cppBaseMap = il2cppMap; // Global ProcMap assign
             KITTY_LOGI("il2cpp base: %p", (void*)il2cppBase);
             break;
         }
