@@ -34,7 +34,7 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
-#define GamePackageName "com.kiloo.subwaysurf"
+#define GamePackageName "com.innersloth.spacemafia"
 
 // Global State
 int glHeight = 0, glWidth = 0;

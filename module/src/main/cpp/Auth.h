@@ -37,7 +37,7 @@ std::string CleanString(std::string str) {
 bool tryAutoLogin() {
     // 🔧 FIX: Unity ka persistentDataPath C++ mein directly nahi milta.
     // Android native apps ke liye standard path use karo.
-    const char* gamePackage = "com.kiloo.subwaysurf"; // Game package name match karo
+    const char* gamePackage = "com.innersloth.spacemafia"; // Game package name match karo
     std::string configPath = "/data/data/";
     configPath += gamePackage;
     configPath += "/files/license.key";
