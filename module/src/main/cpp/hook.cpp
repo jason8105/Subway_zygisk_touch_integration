@@ -9,7 +9,7 @@
 #include <GLES2/gl2.h>
 #include <android/log.h>
 #include <pthread.h>
-#include "xdl.h" 
+#include "xdl.h"
 
 // ✅ Includes
 #include "imgui.h"
@@ -19,36 +19,48 @@
 #include "KittyMemory/KittyScanner.h"
 #include "hook.h"
 #include "menu.h"
-#include "functions.h" // Include iske baad definition likhna
+#include "functions.h" // Declaration yahan se milenge
 #include "Misc.h"
-#include "zygisk.hpp" 
+#include "zygisk.hpp"
+
+// ✅ Near-branch trampoline enable (Crash fix ke liye zaroori)
+#define DOBBY_ENABLE_NEAR_BRANCH_TRAMPOLINE 1
+#if DOBBY_ENABLE_NEAR_BRANCH_TRAMPOLINE
+#include "dobby.h"
+#endif
+
+#define GamePackageName "com.innersloth.spacemafia"
+
+// Global State
+int glHeight = 0, glWidth = 0;
+bool setupimg = false;
+extern bool menuVisible;
 
 // ============================================================================
-// 🔧 FIX: Definitions ab sirf yahan hongi (Function bodies)
+// 🔧 FIX: Function Definitions ab sirf YAHAN hongi (hook.cpp mein)
 // ============================================================================
 
 bool stopZ = false;
 
 void Pointers() {
-    // Agar kuch pointers set karne hain toh yahan likho
+    // Agar koi pointers set karne hain toh yahan likho
 }
 
 void Patches() {
-    // Patches ka code yahan
+    // Patches ka logic yahan
 }
 
 void InitWorker() {
-    // 1. Wait safely for libil2cpp.so to load
+    // 1. Wait for libil2cpp.so
     while (!IL2CPP::il2cpp_base) {
         if (IL2CPP::Init()) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     
-    // 2. Wait safely for Unity to create the IL2CPP Domain
+    // 2. Wait for IL2CPP Domain
     while (!IL2CPP::domain) {
         if (IL2CPP::API::il2cpp_domain_get != nullptr) {
-            Il2CppDomain* dom = IL2CPP::API::il2cpp_domain_get();
-            if (dom) IL2CPP::domain = dom;
+            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
         }
         if (IL2CPP::domain) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -64,32 +76,22 @@ void Hooks() {
 }
 
 // ============================================================================
-// 🔚 Yahan se aage tumhara baki ka XDL+Dobby ka code rahega
+// 🔚 Yahan se aage tumhara Render Hook aur Game Detection code rahega
 // ============================================================================
 
-#define GamePackageName "com.innersloth.spacemafia"
-
-// Global State
-int glHeight = 0, glWidth = 0;
-bool setupimg = false;
-extern bool menuVisible;
-
-// EGL Swap Buffers Hook (Render Loop)
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // Safety Check: Prevent 0x30 crash
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
     }
 
     if (!setupimg) {
-        eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
-        eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
+        EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
+        EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
-        // Agar size 0 hai toh init mat karo
-        if (glWidth > 0 && glHeight > 0) {
+        if (w && h && glWidth > 0 && glHeight > 0) {
             InitMenu();
             setupimg = true;
             LOGI("Menu Init Success | GL: %dx%d", glWidth, glHeight);
@@ -115,7 +117,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     return EGL_FALSE;
 }
 
-// Game Detection
 int isGame(JNIEnv *env, jstring appDataDir) {
     if (!appDataDir) return 0;
     const char *app_data_dir = env->GetStringUTFChars(appDataDir, nullptr);
@@ -139,11 +140,9 @@ int isGame(JNIEnv *env, jstring appDataDir) {
     return 0;
 }
 
-// Main Hook Thread
 void *hack_thread(void *arg) {
     zygisk::Api *api = (zygisk::Api *)arg;
 
-    // Wait for libil2cpp.so
     do {
         sleep(1);
         KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
@@ -157,21 +156,20 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ Hook via XDL + Dobby (Bypasses PLT commit issue)
     void *libEGL = dlopen("libEGL.so", RTLD_LAZY);
     if (libEGL) {
-        void *sym = xdl_sym(libEGL, "eglSwapBuffers", nullptr);
+        void *sym = dlsym(libEGL, "eglSwapBuffers");
         if (sym) {
+#if DOBBY_ENABLE_NEAR_BRANCH_TRAMPOLINE
+            dobby_enable_near_branch_trampoline();
+#endif
             if (DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers) == 0) {
-                LOGI("eglSwapBuffers hooked via XDL+Dobby (libEGL.so)!");
+                LOGI("eglSwapBuffers hooked successfully!");
             } else {
-                LOGE("Dobby Hook Failed!");
+                LOGE("DobbyHook failed!");
             }
-        } else {
-            LOGE("eglSwapBuffers symbol not found in libEGL.so");
         }
-    } else {
-        LOGE("Failed to open libEGL.so");
+        dlclose(libEGL);
     }
 
     LOGI("Hook thread completed successfully!");

@@ -10,10 +10,9 @@
 #include "il2cpp_hook.h"
 #include "xdl.h"
 
-// 🔧 FIX: Variables ke aage 'extern' lagao taaki do jagah define na ho
+// ✅ FIX: Sirf 'extern' aur semicolon (;) yahan hona chahiye
 extern bool stopZ; 
 
-// 🔧 FIX: Functions ke aage semicolon (;) laga do aur braces {} hata do
 void Pointers();
 void Patches();
 void InitWorker();
