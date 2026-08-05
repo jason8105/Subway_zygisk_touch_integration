@@ -152,7 +152,9 @@ int isGame(JNIEnv* env, jstring appDataDir) {
 // ---------------------------------------------------------------------------
 //  Thread started from postAppSpecialize
 // ---------------------------------------------------------------------------
-void* hack_thread(void* /*arg*/) {   // arg no longer used
+void* hack_thread(void* arg) {
+    zygisk::Api* api = static_cast<zygisk::Api*>(arg);
+
     // Wait for libil2cpp.so to be mapped
     while (true) {
         sleep(1);
@@ -168,7 +170,18 @@ void* hack_thread(void* /*arg*/) {   // arg no longer used
     Pointers();
     Hooks();
 
-    // PLT hook already registered in preAppSpecialize – do not repeat here
+    // Register the PLT hook via Zygisk (no Dobby needed for eglSwapBuffers)
+    api->pltHookRegister("libEGL", "eglSwapBuffers",
+                         reinterpret_cast<void*>(hook_eglSwapBuffers),
+                         reinterpret_cast<void**>(&old_eglSwapBuffers));
+
+    if (api->pltHookCommit()) {
+        __android_log_print(ANDROID_LOG_INFO, "zyCheats",
+                            "✅ PLT hook committed");
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                            "❌ PLT hook commit failed");
+    }
 
     __android_log_print(ANDROID_LOG_INFO, "zyCheats",
                         "hack_thread finished");
