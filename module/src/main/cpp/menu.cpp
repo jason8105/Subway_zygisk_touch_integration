@@ -6,6 +6,7 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+// 🔧 FIX: The definition goes here, inside the .cpp file
 bool menuVisible = true;
 
 void InitMenu() {
@@ -37,7 +38,4 @@ void RenderMenu() {
     else ImGui::Text("State: OFF");
 
     ImGui::End();
-    // ImGui::Render();
-    // glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-    // ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
