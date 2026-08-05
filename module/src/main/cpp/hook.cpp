@@ -9,7 +9,7 @@
 #include <GLES2/gl2.h>
 #include <android/log.h>
 #include <pthread.h>
-#include "xdl.h" // 🔧 Xdl use karke library check
+#include "xdl.h"
 
 // ✅ Includes
 #include "imgui.h"
@@ -25,30 +25,24 @@
 
 #define GamePackageName "com.innersloth.spacemafia"
 
+// Global State
+int glHeight = 0, glWidth = 0;
+bool setupimg = false;
+extern bool menuVisible;
 
 // ============================================================================
-// 🔧 FIX: Function Definitions ab sirf YAHAN hongi (hook.cpp mein)
-// Ye functions ka actual code hai jo build fail ho raha tha.
+// 🔧 FIX: Function Implementations (Previously missing -> Linker Error)
 // ============================================================================
 
 bool stopZ = false;
-
-void Pointers() {
-    // Agar pointers set karne hain toh yahan likho
-}
-
-void Patches() {
-    // Patches ka logic yahan
-}
+void Pointers() {}
+void Patches() {}
 
 void InitWorker() {
-    // 1. Wait for libil2cpp.so
     while (!IL2CPP::il2cpp_base) {
         if (IL2CPP::Init()) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    
-    // 2. Wait for IL2CPP Domain
     while (!IL2CPP::domain) {
         if (IL2CPP::API::il2cpp_domain_get != nullptr) {
             IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
@@ -56,28 +50,21 @@ void InitWorker() {
         if (IL2CPP::domain) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-
-    if (IL2CPP::domain) {
-        IL2CPP::Attach();
-    }
+    if (IL2CPP::domain) IL2CPP::Attach();
 }
 
 void Hooks() {
-    std::thread(InitWorker).detach();
+    // No more thread.detach(). IL2CPP attach synchronously handle karo.
+    if (IL2CPP::domain) IL2CPP::Attach();
 }
 
+// ============================================================================
+// 🔚 Render Hook (PLT Hooking - Crash Fixed)
+// ============================================================================
 
-
-// Global State
-int glHeight = 0, glWidth = 0;
-bool setupimg = false;
-extern bool menuVisible;
-
-// ✅ Correct Variable Name
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ FIX: Typo fix here
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
@@ -86,7 +73,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (!setupimg) {
         EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
         EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
-
         if (w && h && glWidth > 0 && glHeight > 0) {
             InitMenu();
             setupimg = true;
@@ -106,17 +92,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (menuVisible) RenderMenu();
 
     ImGui::Render();
-    
-    // ✅ FIX: glClear zaroori hai
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    // ✅ Call original function safely
-    if (old_eglSwapBuffers) {
-        return old_eglSwapBuffers(dpy, surface);
-    }
+    if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
     return EGL_FALSE;
 }
 
@@ -146,7 +126,6 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 void *hack_thread(void *arg) {
     zygisk::Api *api = (zygisk::Api *)arg;
 
-    // Wait for libil2cpp.so
     do {
         sleep(1);
         KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
@@ -160,20 +139,14 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ FIX: Use xdl_open loop to wait for library
-    do {
-        void *handle = xdl_open("libEGL.so", XDL_DEFAULT);
-        if (handle) {
-            void *sym = dlsym(handle, "eglSwapBuffers");
-            if (sym) {
-                DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-                LOGI("eglSwapBuffers hooked successfully!");
-            }
-            xdl_close(handle); // Close handle, but library stays in memory
-            break;
-        }
-        usleep(50000); // Wait 50ms
-    } while (true);
+    // ✅ FIX: Use Zygisk PLT Hooking (Safe, No Register Corruption)
+    api->pltHookRegister("libEGL", "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
+    
+    if (api->pltHookCommit()) {
+        LOGI("✅ PLT Hook Applied Successfully! (No SIGABRT)");
+    } else {
+        LOGE("❌ PLT Hook Commit Failed");
+    }
 
     LOGI("Hook thread completed successfully!");
     return nullptr;
