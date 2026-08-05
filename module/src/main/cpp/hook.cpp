@@ -25,6 +25,49 @@
 
 #define GamePackageName "com.innersloth.spacemafia"
 
+
+// ============================================================================
+// 🔧 FIX: Function Definitions ab sirf YAHAN hongi (hook.cpp mein)
+// Ye functions ka actual code hai jo build fail ho raha tha.
+// ============================================================================
+
+bool stopZ = false;
+
+void Pointers() {
+    // Agar pointers set karne hain toh yahan likho
+}
+
+void Patches() {
+    // Patches ka logic yahan
+}
+
+void InitWorker() {
+    // 1. Wait for libil2cpp.so
+    while (!IL2CPP::il2cpp_base) {
+        if (IL2CPP::Init()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // 2. Wait for IL2CPP Domain
+    while (!IL2CPP::domain) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
+        }
+        if (IL2CPP::domain) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    if (IL2CPP::domain) {
+        IL2CPP::Attach();
+    }
+}
+
+void Hooks() {
+    std::thread(InitWorker).detach();
+}
+
+
+
 // Global State
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
