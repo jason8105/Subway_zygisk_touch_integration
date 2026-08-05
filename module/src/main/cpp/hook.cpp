@@ -14,6 +14,7 @@
 #include <pthread.h>
 
 #include "xdl.h"
+#include "dobby.h"
 
 // ImGui & KittyMemory
 #include "imgui.h"
@@ -40,26 +41,27 @@ bool setupimg = false;
 int enable_hack = 0;
 char* game_data_dir = nullptr;
 
-KittyMemory::ProcMap g_il2cppBaseMap;    // used by Misc.h helpers
+KittyMemory::ProcMap g_il2cppBaseMap;
+
+// Graphics API detection
+enum GraphicsAPI { API_UNKNOWN, API_OPENGL_ES, API_VULKAN };
+static GraphicsAPI g_graphicsAPI = API_UNKNOWN;
 
 // ---------------------------------------------------------------------------
 //  Function bodies
 // ---------------------------------------------------------------------------
-bool stopZ = false;                      // definition for the extern in functions.h
+bool stopZ = false;
 
 void Pointers() {
     LOGI("Pointers() called");
-    // Resolve IL2CPP method pointers here if you need them.
 }
 
 void Patches() {
     LOGI("Patches() called");
-    // Apply any memory patches here.
 }
 
 void InitWorker() {
     LOGI("InitWorker() called");
-    // Wait until IL2CPP is ready.
     while (!IL2CPP::il2cpp_base) {
         if (IL2CPP::Init()) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -77,24 +79,20 @@ void InitWorker() {
 void Hooks() {
     LOGI("Hooks() called");
     if (IL2CPP::domain) IL2CPP::Attach();
-    // Install your Dobby / IL2CPP hooks here.
 }
 
 // ---------------------------------------------------------------------------
-//  eglSwapBuffers PLT hook (safe, no register corruption)
+//  OpenGL ES hook (eglSwapBuffers)
 // ---------------------------------------------------------------------------
 static EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // Log every call to see if the hook is actually triggered
     LOGI("hook_eglSwapBuffers called: dpy=%p, surface=%p, setupimg=%d", dpy, surface, setupimg);
 
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
-        LOGW("hook_eglSwapBuffers: invalid params");
         return old_eglSwapBuffers ? old_eglSwapBuffers(dpy, surface) : EGL_FALSE;
     }
 
-    // One‑time ImGui initialisation
     if (!setupimg) {
         EGLint w = 0, h = 0;
         if (eglQuerySurface(dpy, surface, EGL_WIDTH, &w) &&
@@ -103,17 +101,15 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
             glWidth  = w;
             glHeight = h;
             LOGI("hook_eglSwapBuffers: surface size %dx%d, calling InitMenu()", glWidth, glHeight);
-            InitMenu();                     // creates ImGui context
+            InitMenu();
             setupimg = true;
-            __android_log_print(ANDROID_LOG_INFO, "zyCheats",
-                                "ImGui init OK – %dx%d", glWidth, glHeight);
+            LOGI("ImGui init OK – %dx%d", glWidth, glHeight);
         } else {
             LOGW("hook_eglSwapBuffers: eglQuerySurface failed or invalid size");
         }
     }
 
     if (!setupimg) {
-        // If still not initialized, just pass through
         return old_eglSwapBuffers ? old_eglSwapBuffers(dpy, surface) : EGL_FALSE;
     }
 
@@ -141,19 +137,33 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 }
 
 // ---------------------------------------------------------------------------
-//  PLT hook registration (called from preAppSpecialize)
+//  Vulkan hook (vkQueuePresentKHR) – placeholder
 // ---------------------------------------------------------------------------
-void registerPltHook(zygisk::Api* api) {
-    LOGI("registerPltHook called with api=%p", (void*)api);
-    if (!api) return;
-    // Try with exact library name (no regex dot escape needed for literal dot)
-    api->pltHookRegister("libEGL.so", "eglSwapBuffers",
-                         reinterpret_cast<void*>(hook_eglSwapBuffers),
-                         reinterpret_cast<void**>(&old_eglSwapBuffers));
-    if (api->pltHookCommit()) {
-        LOGI("PLT hook committed in registerPltHook");
+// You'll need to include vulkan headers and define the function pointer types.
+// For now, we just log that Vulkan is detected.
+/*
+static VkResult (*old_vkQueuePresentKHR)(VkQueue, const VkPresentInfoKHR*) = nullptr;
+
+VkResult hook_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) {
+    LOGI("hook_vkQueuePresentKHR called");
+    // ImGui rendering for Vulkan would go here (using ImGui_ImplVulkan)
+    return old_vkQueuePresentKHR(queue, pPresentInfo);
+}
+*/
+
+// ---------------------------------------------------------------------------
+//  Detect graphics API by checking loaded libraries
+// ---------------------------------------------------------------------------
+static void detectGraphicsAPI() {
+    if (KittyMemory::getLibraryBaseMap("libvulkan.so").isValid()) {
+        g_graphicsAPI = API_VULKAN;
+        LOGI("Graphics API: Vulkan");
+    } else if (KittyMemory::getLibraryBaseMap("libGLESv2.so").isValid()) {
+        g_graphicsAPI = API_OPENGL_ES;
+        LOGI("Graphics API: OpenGL ES");
     } else {
-        LOGE("PLT hook commit failed in registerPltHook");
+        g_graphicsAPI = API_UNKNOWN;
+        LOGW("Graphics API: Unknown");
     }
 }
 
@@ -171,7 +181,6 @@ int isGame(JNIEnv* env, jstring appDataDir) {
     int user = 0;
     char pkg[256] = {0};
 
-    // /data/user/0/com.pkg  OR  /data/data/com.pkg
     if (sscanf(dir, "/data/%*[^/]/%d/%255s", &user, pkg) != 2) {
         if (sscanf(dir, "/data/%*[^/]/%255s", pkg) != 1) {
             LOGW("isGame: failed to parse package from path: %s", dir);
@@ -198,22 +207,55 @@ int isGame(JNIEnv* env, jstring appDataDir) {
 // ---------------------------------------------------------------------------
 void* hack_thread(void* /*arg*/) {
     LOGI("hack_thread started");
-    // Wait for libil2cpp.so to be mapped
+
+    // Wait for libil2cpp.so
     while (true) {
         sleep(1);
         KittyMemory::ProcMap map = KittyMemory::getLibraryBaseMap("libil2cpp.so");
         if (map.isValid()) {
             g_il2cppBaseMap = map;
-            __android_log_print(ANDROID_LOG_INFO, "zyCheats",
-                                "libil2cpp.so @ %p", (void*)map.startAddress);
+            LOGI("libil2cpp.so @ %p", (void*)map.startAddress);
             break;
         }
     }
 
+    // Detect graphics API
+    detectGraphicsAPI();
+
+    // Hook based on detected API
+    if (g_graphicsAPI == API_OPENGL_ES) {
+        // Wait for libEGL.so and hook eglSwapBuffers using Dobby
+        while (true) {
+            sleep(1);
+            KittyMemory::ProcMap eglMap = KittyMemory::getLibraryBaseMap("libEGL.so");
+            if (eglMap.isValid()) {
+                LOGI("libEGL.so @ %p", (void*)eglMap.startAddress);
+                void* eglSwapBuffersAddr = dlsym(RTLD_DEFAULT, "eglSwapBuffers");
+                if (eglSwapBuffersAddr) {
+                    LOGI("eglSwapBuffers address: %p", eglSwapBuffersAddr);
+                    int ret = DobbyHook(eglSwapBuffersAddr,
+                                        reinterpret_cast<void*>(hook_eglSwapBuffers),
+                                        reinterpret_cast<void**>(&old_eglSwapBuffers));
+                    if (ret == 0) {
+                        LOGI("Dobby hook on eglSwapBuffers succeeded");
+                    } else {
+                        LOGE("Dobby hook on eglSwapBuffers failed with code %d", ret);
+                    }
+                } else {
+                    LOGE("dlsym failed to find eglSwapBuffers: %s", dlerror());
+                }
+                break;
+            }
+        }
+    } else if (g_graphicsAPI == API_VULKAN) {
+        LOGI("Vulkan detected – Vulkan hook not yet implemented");
+        // TODO: Implement Vulkan hook (vkQueuePresentKHR)
+    } else {
+        LOGE("Unknown graphics API – cannot hook rendering");
+    }
+
     Pointers();
     Hooks();
-
-    // PLT hook already registered in preAppSpecialize – do not repeat here
 
     LOGI("hack_thread finished");
     return nullptr;
