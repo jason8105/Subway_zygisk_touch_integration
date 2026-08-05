@@ -8,12 +8,6 @@
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;
 
-// Forward declarations from hook.cpp (or declare extern in hook.h)
-extern "C" {
-    extern EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
-    extern EGLBoolean hook_eglSwapBuffers(EGLDisplay, EGLSurface);
-}
-
 // ---------------------------------------------------------------------------
 class MyModule : public zygisk::ModuleBase {
 public:
@@ -28,21 +22,14 @@ public:
 
         // Register PLT hook while Zygisk API is still alive
         if (enable_hack && api_) {
-            api_->pltHookRegister("libEGL\\.so", "eglSwapBuffers",
-                                  reinterpret_cast<void*>(hook_eglSwapBuffers),
-                                  reinterpret_cast<void**>(&old_eglSwapBuffers));
-            if (api_->pltHookCommit()) {
-                LOGI("PLT hook committed in preAppSpecialize");
-            } else {
-                LOGE("PLT hook commit failed in preAppSpecialize");
-            }
+            registerPltHook(api_);
         }
     }
 
     void postAppSpecialize(const AppSpecializeArgs*) override {
         if (enable_hack && api_) {
             pthread_t th;
-            pthread_create(&th, nullptr, hack_thread, nullptr); // no longer pass api_
+            pthread_create(&th, nullptr, hack_thread, nullptr);
             pthread_detach(th);
         }
     }

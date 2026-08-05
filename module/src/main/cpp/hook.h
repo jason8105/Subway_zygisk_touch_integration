@@ -2,6 +2,7 @@
 #define ZYGISK_IMGUI_HOOK_H
 
 #include <jni.h>
+#include "zygisk.hpp"
 #include <android/log.h>
 
 // ---------------------------------------------------------------------------
@@ -24,5 +25,7 @@ extern char*      game_data_dir;
 // ---------------------------------------------------------------------------
 int  isGame(JNIEnv* env, jstring appDataDir);
 void* hack_thread(void* arg);
+
+void registerPltHook(zygisk::Api* api);
 
 #endif // ZYGISK_IMGUI_HOOK_H

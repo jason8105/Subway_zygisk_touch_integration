@@ -36,15 +36,14 @@
 // ---------------------------------------------------------------------------
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
-          // definition – menu.h only has extern
-          
+
 int enable_hack = 0;
 char* game_data_dir = nullptr;
 
 KittyMemory::ProcMap g_il2cppBaseMap;    // used by Misc.h helpers
 
 // ---------------------------------------------------------------------------
-//  Function bodies (previously empty – now minimal but functional)
+//  Function bodies
 // ---------------------------------------------------------------------------
 bool stopZ = false;                      // definition for the extern in functions.h
 
@@ -74,7 +73,7 @@ void InitWorker() {
 
 void Hooks() {
     if (IL2CPP::domain) IL2CPP::Attach();
-    // Install your Dobby / PLT hooks here.
+    // Install your Dobby / IL2CPP hooks here.
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +122,21 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 }
 
 // ---------------------------------------------------------------------------
+//  PLT hook registration (called from preAppSpecialize)
+// ---------------------------------------------------------------------------
+void registerPltHook(zygisk::Api* api) {
+    if (!api) return;
+    api->pltHookRegister("libEGL\\.so", "eglSwapBuffers",
+                         reinterpret_cast<void*>(hook_eglSwapBuffers),
+                         reinterpret_cast<void**>(&old_eglSwapBuffers));
+    if (api->pltHookCommit()) {
+        LOGI("PLT hook committed in registerPltHook");
+    } else {
+        LOGE("PLT hook commit failed in registerPltHook");
+    }
+}
+
+// ---------------------------------------------------------------------------
 //  Helper used by Zygisk entry point
 // ---------------------------------------------------------------------------
 int isGame(JNIEnv* env, jstring appDataDir) {
@@ -152,7 +166,7 @@ int isGame(JNIEnv* env, jstring appDataDir) {
 // ---------------------------------------------------------------------------
 //  Thread started from postAppSpecialize
 // ---------------------------------------------------------------------------
-void* hack_thread(void* /*arg*/) {   // arg no longer used
+void* hack_thread(void* /*arg*/) {
     // Wait for libil2cpp.so to be mapped
     while (true) {
         sleep(1);
