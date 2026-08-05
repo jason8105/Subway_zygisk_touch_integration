@@ -22,7 +22,7 @@
 #include "zygisk.hpp"
 
 // Renderer library
-#include "Renderer/renderer.hpp"
+#include "Renderer/Renderer.h"
 
 #define GamePackageName "com.innersloth.spacemafia"
 
