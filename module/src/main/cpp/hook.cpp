@@ -1,3 +1,4 @@
+#include "zygisk.hpp" // <-- Ye line add karo
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
@@ -19,6 +20,7 @@
 #include "menu.h"
 #include "functions.h"
 #include "Misc.h"
+
 
 #define GamePackageName "com.innersloth.spacemafia"
 
