@@ -1,12 +1,11 @@
 #ifndef SUBWAY_MENU_H
 #define SUBWAY_MENU_H
 
-// Function Declarations
+// Forward declarations
 void InitMenu();
 void RenderMenu();
 
-// 🔧 FIX: Use 'extern' here. 
-// This tells the compiler "this variable exists elsewhere".
+// The actual variable lives in menu.cpp
 extern bool menuVisible;
 
-#endif //SUBWAY_MENU_H
+#endif // SUBWAY_MENU_H

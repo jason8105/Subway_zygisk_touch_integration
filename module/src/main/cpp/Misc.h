@@ -1,6 +1,3 @@
-//
-// Created by lbert on 2/9/2023.
-//
 #ifndef ZYGISKPG_MISC_H
 #define ZYGISKPG_MISC_H
 
@@ -14,64 +11,70 @@
 using KittyMemory::ProcMap;
 using KittyScanner::RegisterNativeFn;
 
-ProcMap g_il2cppBaseMap;
+// Filled by hack_thread once libil2cpp.so is located
+extern ProcMap g_il2cppBaseMap;
 
-void hook(void *offset, void* ptr, void **orig)
-{
-    DobbyHook(offset, ptr, orig);
+// ---------------------------------------------------------------------------
+//  Tiny wrapper around DobbyHook
+// ---------------------------------------------------------------------------
+inline void hook(void* offset, void* detour, void** original) {
+    DobbyHook(offset, detour, original);
 }
 
+// ---------------------------------------------------------------------------
+//  Runtime patch helper (used by PATCH / PATCH_SWITCH macros)
+// ---------------------------------------------------------------------------
 std::vector<MemoryPatch> memoryPatches;
-std::vector<uint64_t> offsetVector;
+std::vector<uint64_t>    offsetVector;
 
-// Patching a offset with switch.
-void patchOffset(uint64_t offset, std::string hexBytes, bool isOn) {
-
+inline void patchOffset(uint64_t offset, const std::string& hexBytes, bool enable) {
     MemoryPatch patch = MemoryPatch::createWithHex(g_il2cppBaseMap, offset, hexBytes);
+    if (!patch.isValid()) return;
 
-    //Check if offset exists in the offsetVector
-    if (std::find(offsetVector.begin(), offsetVector.end(), offset) != offsetVector.end()) {
-        //LOGE(OBFUSCATE("Already exists"));
-        std::vector<uint64_t>::iterator itr = std::find(offsetVector.begin(), offsetVector.end(), offset);
-        patch = memoryPatches[std::distance(offsetVector.begin(), itr)]; //Get index of memoryPatches vector
+    auto it = std::find(offsetVector.begin(), offsetVector.end(), offset);
+    if (it != offsetVector.end()) {
+        patch = memoryPatches[std::distance(offsetVector.begin(), it)];
     } else {
         memoryPatches.push_back(patch);
         offsetVector.push_back(offset);
-        //LOGI(OBFUSCATE("Added"));
     }
 
-    if (!patch.isValid()) {
-        return;
-    }
-    if (isOn && patch.get_CurrBytes() == patch.get_OrigBytes()) {
+    if (enable && patch.get_CurrBytes() == patch.get_OrigBytes())
         patch.Modify();
-    } else if (!isOn && patch.get_CurrBytes() != patch.get_OrigBytes()) {
+    else if (!enable && patch.get_CurrBytes() != patch.get_OrigBytes())
         patch.Restore();
-    }
 }
 
-uintptr_t string2Offset(const char *c) {
-    int base = 16;
-    // See if this function catches all possibilities.
-    // If it doesn't, the function would have to be amended
-    // whenever you add a combination of architecture and
-    // compiler that is not yet addressed.
-    static_assert(sizeof(uintptr_t) == sizeof(unsigned long)
-                  || sizeof(uintptr_t) == sizeof(unsigned long long),
-                  "Please add string to handle conversion for this architecture.");
+// ---------------------------------------------------------------------------
+//  Convert a hex string (e.g. "0x1234") to uintptr_t
+// ---------------------------------------------------------------------------
+inline uintptr_t string2Offset(const char* c) {
+    constexpr int base = 16;
+    static_assert(sizeof(uintptr_t) == sizeof(unsigned long) ||
+                  sizeof(uintptr_t) == sizeof(unsigned long long),
+                  "Add conversion for this architecture");
 
-    // Now choose the correct function ...
-    if (sizeof(uintptr_t) == sizeof(unsigned long)) {
+    if (sizeof(uintptr_t) == sizeof(unsigned long))
         return strtoul(c, nullptr, base);
-    }
-
-    // All other options exhausted, sizeof(uintptr_t) == sizeof(unsigned long long))
     return strtoull(c, nullptr, base);
 }
 
-#define HOOK(offset, ptr, orig) hook((void *)(g_il2cppBaseMap.startAddress + string2Offset(OBFUSCATE(offset))), (void *)ptr, (void **)&orig)
-#define PATCH(offset, hex) patchOffset(string2Offset(OBFUSCATE(offset)), OBFUSCATE(hex), true)
-#define PATCH_SWITCH(offset, hex, boolean) patchOffset(string2Offset(OBFUSCATE(offset)), OBFUSCATE(hex), boolean)
-#define RESTORE(offset) patchOffset(string2Offset(OBFUSCATE(offset)), "", false)
+// ---------------------------------------------------------------------------
+//  Convenience macros – they obfuscate the literal strings at compile time
+// ---------------------------------------------------------------------------
+#define HOOK(off, detour, orig) \
+    hook(reinterpret_cast<void*>(g_il2cppBaseMap.startAddress + \
+                string2Offset(OBFUSCATE(off))), \
+         reinterpret_cast<void*>(detour), \
+         reinterpret_cast<void**>(&orig))
 
-#endif //ZYGISKPG_MISC_H
+#define PATCH(off, hex) \
+    patchOffset(string2Offset(OBFUSCATE(off)), OBFUSCATE(hex), true)
+
+#define PATCH_SWITCH(off, hex, enable) \
+    patchOffset(string2Offset(OBFUSCATE(off)), OBFUSCATE(hex), enable)
+
+#define RESTORE(off) \
+    patchOffset(string2Offset(OBFUSCATE(off)), "", false)
+
+#endif // ZYGISKPG_MISC_H

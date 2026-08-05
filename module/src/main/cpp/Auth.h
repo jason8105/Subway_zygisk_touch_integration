@@ -4,57 +4,66 @@
 #include <curl/curl.h>
 #include <fstream>
 #include <string>
-#include <sstream>
 #include <algorithm>
 #include <android/log.h>
 #include <nlohmann/json.hpp>
+#include "Include/obfuscate.h"          // <-- provides OBFUSCATE()
 
 using namespace std;
 using json = nlohmann::json;
 
-// 🔧 FIX: OBFUSCATE("") empty strings bhejta hai jo API ko "Invalid type" error deta hai.
-// Yahan apne actual credentials daalo. Runtime pe decrypt honge.
-std::string secret = OBFUSCATE("YOUR_SECRET_HERE");
-std::string aid = OBFUSCATE("YOUR_AID_HERE");
-std::string apikey = OBFUSCATE("YOUR_APIKEY_HERE");
+// ---------------------------------------------------------------------------
+//  Credentials – replace the placeholders with your real values.
+//  The strings are obfuscated at compile‑time, decrypted at runtime.
+// ---------------------------------------------------------------------------
+static std::string secret = OBFUSCATE("YOUR_SECRET_HERE");
+static std::string aid    = OBFUSCATE("YOUR_AID_HERE");
+static std::string apikey = OBFUSCATE("YOUR_APIKEY_HERE");
 
-std::string readBuffer;
-std::string jsonresult;
+static std::string readBuffer;
+static std::string jsonresult;
 
-size_t WriteCallback(char* ptr, size_t size, size_t nmemb, void* resData) {
-    std::string& buf = *static_cast<std::string*>(resData);
-    buf.append(ptr, ptr + size * nmemb);
+// ---------------------------------------------------------------------------
+static size_t WriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+    std::string& buf = *static_cast<std::string*>(userdata);
+    buf.append(ptr, size * nmemb);
     return size * nmemb;
 }
 
-// 🔧 FIX: Clean newline/carriage return properly
-std::string CleanString(std::string str) {
-    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-    str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
-    return str;
+// ---------------------------------------------------------------------------
+static std::string CleanString(std::string s)
+{
+    s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+    s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
+    return s;
 }
 
-bool tryAutoLogin() {
-    // 🔧 FIX: Unity ka persistentDataPath C++ mein directly nahi milta.
-    // Android native apps ke liye standard path use karo.
-    const char* gamePackage = "com.innersloth.spacemafia"; // Game package name match karo
+// ---------------------------------------------------------------------------
+static bool tryAutoLogin()
+{
+    // --------------------------------------------------------------
+    //  Path to the licence file that the Unity side writes.
+    // --------------------------------------------------------------
+    const char* gamePackage = "com.innersloth.spacemafia";
     std::string configPath = "/data/data/";
     configPath += gamePackage;
     configPath += "/files/license.key";
 
-    LOGE("Reading config from: %s", configPath.c_str());
+    __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                        "Reading config from: %s", configPath.c_str());
 
     std::ifstream file(configPath);
     if (!file.is_open()) {
-        LOGE("Failed to open license.key");
+        __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                            "Failed to open license.key");
         return false;
     }
 
-    std::string username, password;
-    std::string line;
+    std::string username, password, line;
     int lineno = 0;
     while (std::getline(file, line) && lineno < 2) {
-        lineno++;
+        ++lineno;
         if (lineno == 1) username = line;
         else if (lineno == 2) password = line;
     }
@@ -64,27 +73,28 @@ bool tryAutoLogin() {
     password = CleanString(password);
 
     if (username.empty() || password.empty()) {
-        LOGE("Empty credentials in license.key");
+        __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                            "Empty credentials in license.key");
         return false;
     }
 
-    // HWID generate karne ka basic placeholder (optional)
+    // --------------------------------------------------------------
+    //  Optional HWID – left blank for now.
+    // --------------------------------------------------------------
     std::string hwid = "";
 
-    CURL *handle;
-    CURLcode result;
-    long http_code;
+    CURL* handle = curl_easy_init();
+    if (!handle) return false;
 
-    curl_global_init(CURL_GLOBAL_ALL);
-    handle = curl_easy_init();
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers,
+                                "Content-Type: application/x-www-form-urlencoded");
 
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
-
-    std::string postData = "type=login&aid=" + aid + "&apikey=" + apikey + 
-                           "&secret=" + secret + "&username=" + username + 
+    std::string postData = "type=login&aid=" + aid + "&apikey=" + apikey +
+                           "&secret=" + secret + "&username=" + username +
                            "&password=" + password + "&hwid=" + hwid;
 
+    long http_code = 0;
     curl_easy_setopt(handle, CURLOPT_URL, "https://api.auth.gg/v1/");
     curl_easy_setopt(handle, CURLOPT_POST, 1L);
     curl_easy_setopt(handle, CURLOPT_POSTFIELDS, postData.c_str());
@@ -94,31 +104,32 @@ bool tryAutoLogin() {
     curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(handle, CURLOPT_TIMEOUT, 10L);
 
-    result = curl_easy_perform(handle);
+    CURLcode res = curl_easy_perform(handle);
     curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &http_code);
     curl_slist_free_all(headers);
     curl_easy_cleanup(handle);
-    curl_global_cleanup(CURL_GLOBAL_ALL);
 
-    if (result != CURLE_OK) {
-        LOGE("Auth failed: %s", curl_easy_strerror(result));
+    if (res != CURLE_OK) {
+        __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                            "Auth failed: %s", curl_easy_strerror(res));
         return false;
     }
 
     if (http_code == 200) {
         jsonresult = readBuffer;
-        LOGI("Auth Response: %s", jsonresult.c_str());
-        
+        __android_log_print(ANDROID_LOG_INFO, "zyCheats",
+                            "Auth Response: %s", jsonresult.c_str());
+
         try {
             auto j = json::parse(jsonresult);
-            if (j["result"].get<std::string>() == "success") {
+            if (j["result"].get<std::string>() == "success")
                 return true;
-            }
         } catch (...) {
-            LOGE("JSON parse error");
+            __android_log_print(ANDROID_LOG_ERROR, "zyCheats",
+                                "JSON parse error");
         }
     }
     return false;
 }
 
-#endif //ZYGISKPG_AUTH_H
+#endif // ZYGISKPG_AUTH_H

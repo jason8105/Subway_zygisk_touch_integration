@@ -6,20 +6,24 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
-// 🔧 FIX: The definition goes here, inside the .cpp file
+// Definition for the extern declared in menu.h
 bool menuVisible = true;
 
+// ---------------------------------------------------------------------------
 void InitMenu() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard |
+                      ImGuiConfigFlags_NavEnableGamepad;
     io.Fonts->AddFontDefault();
     ImGui::StyleColorsDark();
+
     ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(2.0f);
+    style.ScaleAllSizes(2.0f);          // make it readable on phones
 }
 
+// ---------------------------------------------------------------------------
 void RenderMenu() {
     if (!menuVisible) return;
 
@@ -28,14 +32,14 @@ void RenderMenu() {
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::Begin("Subway Menu", &menuVisible, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+    ImGui::Begin("Subway Menu", &menuVisible,
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
     ImGui::Text("Overlay Active");
     ImGui::Separator();
 
     static bool toggle = false;
     ImGui::Checkbox("Example Toggle", &toggle);
-    if (toggle) ImGui::Text("State: ON");
-    else ImGui::Text("State: OFF");
+    ImGui::Text(toggle ? "State: ON" : "State: OFF");
 
     ImGui::End();
 }

@@ -1,26 +1,28 @@
-
-#ifndef ZygiskImGui_HOOK_H
-#define ZygiskImGui_HOOK_H
+#ifndef ZYGISK_IMGUI_HOOK_H
+#define ZYGISK_IMGUI_HOOK_H
 
 #include <jni.h>
-
-static int enable_hack;
-static char *game_data_dir = NULL;
-
-int isGame(JNIEnv *env, jstring appDataDir);
-
-void *hack_thread(void *arg);
-
 #include <android/log.h>
 
+// ---------------------------------------------------------------------------
+//  Logging macros (single definition)
+// ---------------------------------------------------------------------------
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-#define HOOKAF(ret, func, ...) \
-    ret (*orig##func)(__VA_ARGS__); \
-    ret my##func(__VA_ARGS__)
+// ---------------------------------------------------------------------------
+//  Global variables – **declare only** (definitions live in hook.cpp)
+// ---------------------------------------------------------------------------
+extern int        enable_hack;
+extern char*      game_data_dir;
 
-#endif //ZygiskImGui_HOOK_H
+// ---------------------------------------------------------------------------
+//  Forward declarations
+// ---------------------------------------------------------------------------
+int  isGame(JNIEnv* env, jstring appDataDir);
+void* hack_thread(void* arg);
+
+#endif // ZYGISK_IMGUI_HOOK_H

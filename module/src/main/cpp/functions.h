@@ -2,20 +2,17 @@
 #define ZYCHEATS_SGUYS_FUNCTIONS_H
 
 #include <jni.h>
-#include <android/log.h>
 #include <dobby.h>
-#include <thread>
-#include <chrono>
 #include "il2cpp.h"
-#include "il2cpp_hook.h"
 #include "xdl.h"
 
-// ✅ Sirf Declaration: 'extern' aur semicolon (;) yahan hona chahiye
-extern bool stopZ; 
+// The variable is defined in hook.cpp – only declare it here.
+extern bool stopZ;
 
+// Forward declarations (implemented in hook.cpp)
 void Pointers();
 void Patches();
 void InitWorker();
 void Hooks();
 
-#endif //ZYCHEATS_SGUYS_FUNCTIONS_H
+#endif // ZYCHEATS_SGUYS_FUNCTIONS_H
