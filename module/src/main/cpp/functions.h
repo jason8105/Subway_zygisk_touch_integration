@@ -10,7 +10,7 @@
 #include "il2cpp_hook.h"
 #include "xdl.h"
 
-// ✅ FIX: Sirf 'extern' aur semicolon (;) yahan hona chahiye
+// ✅ Sirf Declaration: 'extern' aur semicolon (;) yahan hona chahiye
 extern bool stopZ; 
 
 void Pointers();

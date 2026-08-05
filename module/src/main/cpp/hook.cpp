@@ -19,7 +19,7 @@
 #include "KittyMemory/KittyScanner.h"
 #include "hook.h"
 #include "menu.h"
-#include "functions.h"
+#include "functions.h" // Declaration yahan se milenge
 #include "Misc.h"
 #include "zygisk.hpp"
 
@@ -36,7 +36,49 @@ int glHeight = 0, glWidth = 0;
 bool setupimg = false;
 extern bool menuVisible;
 
-// EGL Swap Buffers Hook (Render Loop)
+// ============================================================================
+// 🔧 FIX: Function Definitions ab sirf YAHAN hongi (hook.cpp mein)
+// ============================================================================
+
+bool stopZ = false;
+
+void Pointers() {
+    // Agar koi pointers set karne hain toh yahan likho
+}
+
+void Patches() {
+    // Patches ka logic yahan
+}
+
+void InitWorker() {
+    // 1. Wait for libil2cpp.so
+    while (!IL2CPP::il2cpp_base) {
+        if (IL2CPP::Init()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // 2. Wait for IL2CPP Domain
+    while (!IL2CPP::domain) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
+        }
+        if (IL2CPP::domain) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    if (IL2CPP::domain) {
+        IL2CPP::Attach();
+    }
+}
+
+void Hooks() {
+    std::thread(InitWorker).detach();
+}
+
+// ============================================================================
+// 🔚 Yahan se aage tumhara Render Hook aur Game Detection code rahega
+// ============================================================================
+
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
@@ -83,7 +125,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     return EGL_FALSE;
 }
 
-// Game Detection
 int isGame(JNIEnv *env, jstring appDataDir) {
     if (!appDataDir) return 0;
     const char *app_data_dir = env->GetStringUTFChars(appDataDir, nullptr);
@@ -107,7 +148,6 @@ int isGame(JNIEnv *env, jstring appDataDir) {
     return 0;
 }
 
-// Main Hook Thread
 void *hack_thread(void *arg) {
     zygisk::Api *api = (zygisk::Api *)arg;
 
@@ -122,19 +162,24 @@ void *hack_thread(void *arg) {
         }
     } while (true);
 
+    // ✅ Yahan Pointers aur Hooks call honge
     Pointers();
     Hooks();
 
-    // ✅ FIX: Use pltHookRegister instead of dlopen + DobbyHook
-    // Ye method Zygisk ke official API use karta hai aur register corruption fix karta hai
-    api->pltHookRegister("libEGL.so", "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-    
-    // Commit karein
-    if (api->pltHookCommit()) {
-        LOGI("eglSwapBuffers hooked successfully via pltHook!");
-    } else {
-        LOGE("pltHookCommit Failed! Retrying via Dobby fallback...");
-        // Fallback logic (agar zaroori ho) yahan add kar sakte ho, lekin usually PLT hi kaam karta hai.
+    void *libEGL = dlopen("libEGL.so", RTLD_LAZY);
+    if (libEGL) {
+        void *sym = dlsym(libEGL, "eglSwapBuffers");
+        if (sym) {
+#if DOBBY_ENABLE_NEAR_BRANCH_TRAMPOLINE
+            dobby_enable_near_branch_trampoline();
+#endif
+            if (DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers) == 0) {
+                LOGI("eglSwapBuffers hooked successfully!");
+            } else {
+                LOGE("DobbyHook failed!");
+            }
+        }
+        dlclose(libEGL);
     }
 
     LOGI("Hook thread completed successfully!");
