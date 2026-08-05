@@ -41,6 +41,11 @@ include_directories(
     xdl/include
     il2cpp
     il2cpp/src
+    Renderer                # <-- new
+    Renderer/OpenGL         # <-- new
+    Renderer/Vulkan         # <-- new
+    Renderer/Input          # <-- new
+    ${ANDROID_NDK}/sources/third_party/vulkan/src/include   # Vulkan headers (NDK)
 )
 
 # ---------------------------------------------------------------------------
@@ -48,6 +53,7 @@ include_directories(
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE XDL_SRC   CONFIGURE_DEPENDS xdl/*.c xdl/*.cpp)
 file(GLOB_RECURSE IL2CPP_SRC CONFIGURE_DEPENDS il2cpp/*.c il2cpp/*.cpp)
+file(GLOB_RECURSE RENDERER_SRC CONFIGURE_DEPENDS Renderer/*.cpp)   # <-- new
 
 set(MODULE_SRCS
     ImGui/imgui.cpp
@@ -71,12 +77,13 @@ set(MODULE_SRCS
 
     ${XDL_SRC}
     ${IL2CPP_SRC}
+    ${RENDERER_SRC}          # <-- new
 )
 
 add_library(${MODULE_NAME} SHARED ${MODULE_SRCS})
 
 # ---------------------------------------------------------------------------
-#  Pre‑built static libraries (Dobby + curl) – placed under libs/<abi>/
+#  Pre‑built static libraries (Dobby + curl)
 # ---------------------------------------------------------------------------
 set(DOBBY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libdobby.a)
 set(CURL_LIB  ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libcurl.a)
@@ -89,6 +96,7 @@ find_library(EGL_LIB   EGL)
 find_library(ANDROID_LIB android)
 find_library(GLESV2_LIB GLESv2)
 find_library(Z_LIB     z)
+find_library(VULKAN_LIB vulkan)            # <-- new
 
 if (ANDROID_PLATFORM_LEVEL LESS 12)
     message(FATAL_ERROR "OpenGL ES 2.0 requires API level 12+")
@@ -103,6 +111,7 @@ target_link_libraries(${MODULE_NAME}
     ${LOG_LIB}
     ${DOBBY_LIB}
     ${CURL_LIB}
+    ${VULKAN_LIB}          # <-- new
     ${OPENGL_LIB}
     ${GLESV2_LIB}
     ${EGL_LIB}

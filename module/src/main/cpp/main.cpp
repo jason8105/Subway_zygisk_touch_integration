@@ -1,6 +1,5 @@
 #include <jni.h>
 #include <pthread.h>
-#include <cstdlib>
 #include "hook.h"
 #include "zygisk.hpp"
 #include "il2cpp.h"
@@ -21,12 +20,6 @@ public:
         if (!args || !args->nice_name) return;
         enable_hack = isGame(env_, args->app_data_dir);
         LOGI("preAppSpecialize: enable_hack=%d, api_=%p", enable_hack, (void*)api_);
-
-        // Force OpenGL ES by disabling Vulkan
-        if (enable_hack) {
-            setenv("__GL_DISABLE_VULKAN", "1", 1);
-            LOGI("Forced OpenGL ES (disabled Vulkan)");
-        }
     }
 
     void postAppSpecialize(const AppSpecializeArgs*) override {
