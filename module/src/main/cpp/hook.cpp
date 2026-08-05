@@ -125,6 +125,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 //  PLT hook registration (called from preAppSpecialize)
 // ---------------------------------------------------------------------------
 void registerPltHook(zygisk::Api* api) {
+    LOGI("registerPltHook called with api=%p", (void*)api);
     if (!api) return;
     api->pltHookRegister("libEGL\\.so", "eglSwapBuffers",
                          reinterpret_cast<void*>(hook_eglSwapBuffers),
@@ -154,12 +155,15 @@ int isGame(JNIEnv* env, jstring appDataDir) {
     }
     env->ReleaseStringUTFChars(appDataDir, dir);
 
+    LOGI("isGame: parsed pkg=%s", pkg);
     if (strcmp(pkg, GamePackageName) == 0) {
+        LOGI("isGame: match! package=%s", pkg);
         delete[] game_data_dir;
         game_data_dir = new char[strlen(dir) + 1];
         strcpy(game_data_dir, dir);
         return 1;
     }
+    LOGI("isGame: no match, pkg=%s", pkg);
     return 0;
 }
 
@@ -167,6 +171,7 @@ int isGame(JNIEnv* env, jstring appDataDir) {
 //  Thread started from postAppSpecialize
 // ---------------------------------------------------------------------------
 void* hack_thread(void* /*arg*/) {
+    LOGI("hack_thread started");
     // Wait for libil2cpp.so to be mapped
     while (true) {
         sleep(1);
@@ -184,7 +189,6 @@ void* hack_thread(void* /*arg*/) {
 
     // PLT hook already registered in preAppSpecialize – do not repeat here
 
-    __android_log_print(ANDROID_LOG_INFO, "zyCheats",
-                        "hack_thread finished");
+    LOGI("hack_thread finished");
     return nullptr;
 }
