@@ -37,6 +37,10 @@
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
           // definition – menu.h only has extern
+          
+int enable_hack = 0;
+char* game_data_dir = nullptr;
+
 KittyMemory::ProcMap g_il2cppBaseMap;    // used by Misc.h helpers
 
 // ---------------------------------------------------------------------------
