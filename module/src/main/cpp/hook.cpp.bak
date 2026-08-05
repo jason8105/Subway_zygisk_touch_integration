@@ -9,7 +9,7 @@
 #include <GLES2/gl2.h>
 #include <android/log.h>
 #include <pthread.h>
-#include "xdl.h" // 🔧 Xdl use karke library check
+#include "xdl.h" // 🔧 Use xdl to find libraries safely
 
 // ✅ Includes
 #include "imgui.h"
@@ -30,13 +30,13 @@ int glHeight = 0, glWidth = 0;
 bool setupimg = false;
 extern bool menuVisible;
 
-// ✅ Correct Variable Name
+// EGL Swap Buffers Hook (Render Loop)
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ FIX: Typo fix here
+    // ✅ FIX: Null pointer checks taaki 0x30 crash na ho
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
-        if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
+        if (old_glSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
     }
 
@@ -117,19 +117,27 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ FIX: Use xdl_open loop to wait for library
+    // ✅ FIX: Use PLT Hook with a wait loop
+    // Dobby crash fix karne ke liye hum xdl_open use karke library ready hone ka wait karenge
     do {
         void *handle = xdl_open("libEGL.so", XDL_DEFAULT);
         if (handle) {
-            void *sym = dlsym(handle, "eglSwapBuffers");
-            if (sym) {
-                DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-                LOGI("eglSwapBuffers hooked successfully!");
+            // 🔧 Register Hook
+            api->pltHookRegister("libEGL.so", "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
+            
+            // 🔧 Commit Hook (Safe & No Crash)
+            if (api->pltHookCommit()) {
+                LOGI("✅ PLT Hook Applied Successfully!");
+            } else {
+                LOGE("❌ PLT Hook Commit Failed");
             }
-            xdl_close(handle); // Close handle, but library stays in memory
-            break;
+            
+            xdl_close(handle);
+            break; // Hook lag gaya, loop se bahar
         }
-        usleep(50000); // Wait 50ms
+        
+        // Agar library abhi load nahi hui, toh thoda wait karo
+        usleep(50000); // 50ms
     } while (true);
 
     LOGI("Hook thread completed successfully!");
