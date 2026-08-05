@@ -48,14 +48,17 @@ KittyMemory::ProcMap g_il2cppBaseMap;    // used by Misc.h helpers
 bool stopZ = false;                      // definition for the extern in functions.h
 
 void Pointers() {
+    LOGI("Pointers() called");
     // Resolve IL2CPP method pointers here if you need them.
 }
 
 void Patches() {
+    LOGI("Patches() called");
     // Apply any memory patches here.
 }
 
 void InitWorker() {
+    LOGI("InitWorker() called");
     // Wait until IL2CPP is ready.
     while (!IL2CPP::il2cpp_base) {
         if (IL2CPP::Init()) break;
@@ -72,6 +75,7 @@ void InitWorker() {
 }
 
 void Hooks() {
+    LOGI("Hooks() called");
     if (IL2CPP::domain) IL2CPP::Attach();
     // Install your Dobby / IL2CPP hooks here.
 }
@@ -82,7 +86,11 @@ void Hooks() {
 static EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    // Log every call to see if the hook is actually triggered
+    LOGI("hook_eglSwapBuffers called: dpy=%p, surface=%p, setupimg=%d", dpy, surface, setupimg);
+
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
+        LOGW("hook_eglSwapBuffers: invalid params");
         return old_eglSwapBuffers ? old_eglSwapBuffers(dpy, surface) : EGL_FALSE;
     }
 
@@ -94,11 +102,19 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
             w > 0 && h > 0) {
             glWidth  = w;
             glHeight = h;
+            LOGI("hook_eglSwapBuffers: surface size %dx%d, calling InitMenu()", glWidth, glHeight);
             InitMenu();                     // creates ImGui context
             setupimg = true;
             __android_log_print(ANDROID_LOG_INFO, "zyCheats",
                                 "ImGui init OK – %dx%d", glWidth, glHeight);
+        } else {
+            LOGW("hook_eglSwapBuffers: eglQuerySurface failed or invalid size");
         }
+    }
+
+    if (!setupimg) {
+        // If still not initialized, just pass through
+        return old_eglSwapBuffers ? old_eglSwapBuffers(dpy, surface) : EGL_FALSE;
     }
 
     ImGuiIO& io = ImGui::GetIO();
@@ -110,7 +126,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
-    if (menuVisible) RenderMenu();
+    if (menuVisible) {
+        LOGI("hook_eglSwapBuffers: rendering menu");
+        RenderMenu();
+    }
 
     ImGui::Render();
     glViewport(0, 0, static_cast<GLsizei>(io.DisplaySize.x),
@@ -127,7 +146,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 void registerPltHook(zygisk::Api* api) {
     LOGI("registerPltHook called with api=%p", (void*)api);
     if (!api) return;
-    api->pltHookRegister("libEGL\\.so", "eglSwapBuffers",
+    // Try with exact library name (no regex dot escape needed for literal dot)
+    api->pltHookRegister("libEGL.so", "eglSwapBuffers",
                          reinterpret_cast<void*>(hook_eglSwapBuffers),
                          reinterpret_cast<void**>(&old_eglSwapBuffers));
     if (api->pltHookCommit()) {
@@ -140,15 +160,13 @@ void registerPltHook(zygisk::Api* api) {
 // ---------------------------------------------------------------------------
 //  Helper used by Zygisk entry point
 // ---------------------------------------------------------------------------
-// ... (all previous code unchanged except isGame) ...
-
 int isGame(JNIEnv* env, jstring appDataDir) {
     if (!appDataDir) {
         LOGW("isGame: appDataDir is null");
         return 0;
     }
     const char* dir = env->GetStringUTFChars(appDataDir, nullptr);
-    LOGI("isGame: full dir=%s", dir);  // Log the full path
+    LOGI("isGame: full dir=%s", dir);
 
     int user = 0;
     char pkg[256] = {0};
