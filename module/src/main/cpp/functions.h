@@ -10,37 +10,13 @@
 #include "il2cpp_hook.h"
 #include "xdl.h"
 
-// Restored stopZ for menu.h compatibility
-bool stopZ = false; 
+// 🔧 FIX: Variables ke aage 'extern' lagao taaki do jagah define na ho
+extern bool stopZ; 
 
-void Pointers() {}
-void Patches() {}
-
-// Background worker thread to prevent early boot crashes (SIGSEGV)
-void InitWorker() {
-    // 1. Wait safely for libil2cpp.so to load
-    while (!IL2CPP::il2cpp_base) {
-        if (IL2CPP::Init()) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-    
-    // 2. Wait safely for Unity to create the IL2CPP Domain
-    while (!IL2CPP::domain) {
-        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
-            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
-        }
-        if (IL2CPP::domain != nullptr) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-
-    // ====================================================================
-    // GAME HOOKS GO HERE (Safe to add hooks here once domain is ready)
-    // ====================================================================
-}
-
-void Hooks() {
-    // Spawn detached thread so game startup is not blocked
-    std::thread(InitWorker).detach();
-}
+// 🔧 FIX: Functions ke aage semicolon (;) laga do aur braces {} hata do
+void Pointers();
+void Patches();
+void InitWorker();
+void Hooks();
 
 #endif //ZYCHEATS_SGUYS_FUNCTIONS_H

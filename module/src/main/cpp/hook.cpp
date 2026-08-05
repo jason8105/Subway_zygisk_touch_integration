@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include "xdl.h" 
 
+// ✅ Includes
 #include "imgui.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_android.h"
@@ -18,9 +19,53 @@
 #include "KittyMemory/KittyScanner.h"
 #include "hook.h"
 #include "menu.h"
-#include "functions.h"
+#include "functions.h" // Include iske baad definition likhna
 #include "Misc.h"
 #include "zygisk.hpp" 
+
+// ============================================================================
+// 🔧 FIX: Definitions ab sirf yahan hongi (Function bodies)
+// ============================================================================
+
+bool stopZ = false;
+
+void Pointers() {
+    // Agar kuch pointers set karne hain toh yahan likho
+}
+
+void Patches() {
+    // Patches ka code yahan
+}
+
+void InitWorker() {
+    // 1. Wait safely for libil2cpp.so to load
+    while (!IL2CPP::il2cpp_base) {
+        if (IL2CPP::Init()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // 2. Wait safely for Unity to create the IL2CPP Domain
+    while (!IL2CPP::domain) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            Il2CppDomain* dom = IL2CPP::API::il2cpp_domain_get();
+            if (dom) IL2CPP::domain = dom;
+        }
+        if (IL2CPP::domain) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    if (IL2CPP::domain) {
+        IL2CPP::Attach();
+    }
+}
+
+void Hooks() {
+    std::thread(InitWorker).detach();
+}
+
+// ============================================================================
+// 🔚 Yahan se aage tumhara baki ka XDL+Dobby ka code rahega
+// ============================================================================
 
 #define GamePackageName "com.innersloth.spacemafia"
 
