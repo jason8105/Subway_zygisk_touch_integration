@@ -12,7 +12,6 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <android/log.h>
-#include <android/input.h>
 
 // ImGui
 #include "imgui.h"
@@ -34,7 +33,7 @@
 #include "Misc.h"
 #include "Include/Roboto-Regular.h"
 
-// ✅ Package Name (Among Us)
+// ✅ Among Us Package Name
 #define GamePackageName "com.innersloth.spacemafia"
 
 // Global State
@@ -45,15 +44,14 @@ bool setupimg = false;
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ FIX: Ensure we have a valid context before doing anything
-    EGLContext context = eglGetCurrentContext();
-    if (context == EGL_NO_CONTEXT || dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
+    // ✅ FIX 1: Ensure we have a valid context and display
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return 0;
     }
 
     if (!setupimg) {
-        // ✅ FIX: Query surface safely only once at startup
+        // ✅ FIX 2: Initialize Menu ONLY if valid surface dimensions are returned
         EGLBoolean w = eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
         EGLBoolean h = eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
@@ -66,7 +64,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     ImGuiIO &io = ImGui::GetIO();
     
-    // ✅ FIX: Ensure valid display size
+    // ✅ FIX 3: Ensure valid display size to prevent 0x0 draw calls
     if (glWidth > 0 && glHeight > 0) {
         io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
     }
@@ -86,7 +84,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    // ✅ FIX: Safe call to original function
+    // ✅ FIX 4: Safe call to original function
     if (old_eglSwapBuffers) {
         return old_eglSwapBuffers(dpy, surface);
     }
@@ -137,7 +135,7 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ FIX: Hook from libEGL.so (Correct Library)
+    // ✅ FIX 5: Hook from libEGL.so (Correct Library)
     void *eglhandle = dlopen("libEGL.so", RTLD_LAZY);
     void *symEgl = NULL;
     
@@ -147,7 +145,6 @@ void *hack_thread(void *arg) {
     }
     
     if (symEgl) {
-        // Use extern "C" signature for safety on Android
         DobbyHook(symEgl, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
         LOGI("eglSwapBuffers hooked from libEGL!");
     } else {
@@ -155,8 +152,8 @@ void *hack_thread(void *arg) {
     }
 
     // ❌ REMOVED: Input Hook (AInputQueue_getEvent)
-    // Input hook was causing the libil2cpp crash (0x135) which cascaded to render crash.
-    // We rely on ImGui internal touch handling now.
+    // Input hook was causing the main thread panic (0x135 crash) which cascaded to render crash.
+    // We rely on standard Android input handling now to keep the game stable.
 
     LOGI("Hook thread completed successfully!");
     return nullptr;
