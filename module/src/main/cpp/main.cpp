@@ -6,36 +6,32 @@
 #include "il2cpp.h"
 #include "xdl.h"
 
-
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;
-using zygisk::ServerSpecializeArgs;
+
 class MyModule : public zygisk::ModuleBase {
 public:
     void onLoad(Api *api, JNIEnv *env) override {
-        env_ = env;
+        this->api_ = api; // ✅ Store API pointer
+        this->env_ = env;
     }
 
     void preAppSpecialize(AppSpecializeArgs *args) override {
-        if (!args || !args->nice_name) {
-            LOGE("Skip unknown process");
-            return;
-        }
+        if (!args || !args->nice_name) return;
         enable_hack = isGame(env_, args->app_data_dir);
     }
 
     void postAppSpecialize(const AppSpecializeArgs *) override {
-        if (enable_hack) {
-            int ret;
+        if (enable_hack && api_) {
             pthread_t ntid;
-            if ((ret = pthread_create(&ntid, nullptr, hack_thread, nullptr))) {
-                LOGE("can't create thread: %s\n", strerror(ret));
-            }
+            // ✅ FIX: Pass 'api' pointer to thread
+            pthread_create(&ntid, nullptr, hack_thread, (void *)api_);
         }
     }
 
 private:
-    JNIEnv *env_{};
+    Api *api_ = nullptr;
+    JNIEnv *env_ = nullptr;
 };
 
 REGISTER_ZYGISK_MODULE(MyModule)
