@@ -140,15 +140,23 @@ void registerPltHook(zygisk::Api* api) {
 // ---------------------------------------------------------------------------
 //  Helper used by Zygisk entry point
 // ---------------------------------------------------------------------------
+// ... (all previous code unchanged except isGame) ...
+
 int isGame(JNIEnv* env, jstring appDataDir) {
-    if (!appDataDir) return 0;
+    if (!appDataDir) {
+        LOGW("isGame: appDataDir is null");
+        return 0;
+    }
     const char* dir = env->GetStringUTFChars(appDataDir, nullptr);
+    LOGI("isGame: full dir=%s", dir);  // Log the full path
+
     int user = 0;
     char pkg[256] = {0};
 
     // /data/user/0/com.pkg  OR  /data/data/com.pkg
     if (sscanf(dir, "/data/%*[^/]/%d/%255s", &user, pkg) != 2) {
         if (sscanf(dir, "/data/%*[^/]/%255s", pkg) != 1) {
+            LOGW("isGame: failed to parse package from path: %s", dir);
             env->ReleaseStringUTFChars(appDataDir, dir);
             return 0;
         }
