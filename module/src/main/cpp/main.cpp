@@ -1,37 +1,50 @@
-#include <cstring>
+#ifndef ZYCHEATS_SGUYS_FUNCTIONS_H
+#define ZYCHEATS_SGUYS_FUNCTIONS_H
+
 #include <jni.h>
-#include <pthread.h>
-#include "hook.h"
-#include "zygisk.hpp"
+#include <android/log.h>
+#include <dobby.h>
+#include <thread>
+#include <chrono>
 #include "il2cpp.h"
+#include "il2cpp_hook.h"
 #include "xdl.h"
 
-using zygisk::Api;
-using zygisk::AppSpecializeArgs;
+// Restored stopZ for menu.h compatibility
+bool stopZ = false; 
 
-class MyModule : public zygisk::ModuleBase {
-public:
-    void onLoad(Api *api, JNIEnv *env) override {
-        this->api_ = api; // ✅ Store API pointer
-        this->env_ = env;
+void Pointers() {}
+void Patches() {}
+
+// Background worker thread to prevent early boot crashes (SIGSEGV)
+void InitWorker() {
+    // 1. Wait safely for libil2cpp.so to load
+    while (!IL2CPP::il2cpp_base) {
+        if (IL2CPP::Init()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-
-    void preAppSpecialize(AppSpecializeArgs *args) override {
-        if (!args || !args->nice_name) return;
-        enable_hack = isGame(env_, args->app_data_dir);
-    }
-
-    void postAppSpecialize(const AppSpecializeArgs *) override {
-        if (enable_hack && api_) {
-            pthread_t ntid;
-            // ✅ FIX: Pass 'api' pointer to thread
-            pthread_create(&ntid, nullptr, hack_thread, (void *)api_);
+    
+    // 2. Wait safely for Unity to create the IL2CPP Domain
+    while (!IL2CPP::domain) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            Il2CppDomain* dom = IL2CPP::API::il2cpp_domain_get();
+            if (dom) IL2CPP::domain = dom;
         }
+        if (IL2CPP::domain) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-private:
-    Api *api_ = nullptr;
-    JNIEnv *env_ = nullptr;
-};
+    // ====================================================================
+    // ✅ FIX: Check karo ki domain valid hai ya nahi
+    // ====================================================================
+    if (IL2CPP::domain) {
+        IL2CPP::Attach();
+    }
+}
 
-REGISTER_ZYGISK_MODULE(MyModule)
+void Hooks() {
+    // Spawn detached thread so game startup is not blocked
+    std::thread(InitWorker).detach();
+}
+
+#endif //ZYCHEATS_SGUYS_FUNCTIONS_H

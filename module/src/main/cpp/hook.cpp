@@ -1,4 +1,3 @@
-#include "zygisk.hpp" // <-- Ye line add karo
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
@@ -10,6 +9,7 @@
 #include <GLES2/gl2.h>
 #include <android/log.h>
 #include <pthread.h>
+#include "xdl.h" 
 
 #include "imgui.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -20,10 +20,11 @@
 #include "menu.h"
 #include "functions.h"
 #include "Misc.h"
-
+#include "zygisk.hpp" 
 
 #define GamePackageName "com.innersloth.spacemafia"
 
+// Global State
 int glHeight = 0, glWidth = 0;
 bool setupimg = false;
 extern bool menuVisible;
@@ -32,7 +33,7 @@ extern bool menuVisible;
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface);
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // ✅ SAFETY CHECK: Crash fix for 0x30
+    // Safety Check: Prevent 0x30 crash
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         if (old_eglSwapBuffers) return old_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
@@ -43,13 +44,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
         // Agar size 0 hai toh init mat karo
-        if (glWidth == 0 || glHeight == 0) {
-            return old_eglSwapBuffers(dpy, surface);
+        if (glWidth > 0 && glHeight > 0) {
+            InitMenu();
+            setupimg = true;
+            LOGI("Menu Init Success | GL: %dx%d", glWidth, glHeight);
         }
-
-        InitMenu();
-        setupimg = true;
-        LOGI("Menu Init Success | GL: %dx%d", glWidth, glHeight);
     }
 
     ImGuiIO &io = ImGui::GetIO();
@@ -64,7 +63,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (menuVisible) RenderMenu();
 
     ImGui::Render();
-    
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -98,10 +96,9 @@ int isGame(JNIEnv *env, jstring appDataDir) {
 
 // Main Hook Thread
 void *hack_thread(void *arg) {
-    // ✅ API Pointer retrieve karna zaroori hai
     zygisk::Api *api = (zygisk::Api *)arg;
 
-    // Wait for libil2cpp.so (For Game Logic Hooks later)
+    // Wait for libil2cpp.so
     do {
         sleep(1);
         KittyMemory::ProcMap il2cppMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
@@ -115,16 +112,21 @@ void *hack_thread(void *arg) {
     Pointers();
     Hooks();
 
-    // ✅ NEW METHOD: Use PLT Hook (Safe)
-    // Yeh register corruption nahi karta, isliye crash nahi hoga
-    if (api) {
-        api->pltHookRegister("libEGL.so", "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
-        
-        if (!api->pltHookCommit()) {
-            LOGE("PLT Hook Commit Failed!");
+    // ✅ Hook via XDL + Dobby (Bypasses PLT commit issue)
+    void *libEGL = dlopen("libEGL.so", RTLD_LAZY);
+    if (libEGL) {
+        void *sym = xdl_sym(libEGL, "eglSwapBuffers", nullptr);
+        if (sym) {
+            if (DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers) == 0) {
+                LOGI("eglSwapBuffers hooked via XDL+Dobby (libEGL.so)!");
+            } else {
+                LOGE("Dobby Hook Failed!");
+            }
         } else {
-            LOGI("eglSwapBuffers hooked via PLT (Safe)!");
+            LOGE("eglSwapBuffers symbol not found in libEGL.so");
         }
+    } else {
+        LOGE("Failed to open libEGL.so");
     }
 
     LOGI("Hook thread completed successfully!");
