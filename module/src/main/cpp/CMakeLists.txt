@@ -11,7 +11,7 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Compiler / linker flags (unchanged)
+# Compiler / linker flags
 set(COMMON_FLAGS "-ffixed-x18 -Werror=format -fdata-sections -ffunction-sections")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -fno-exceptions -fno-rtti")
@@ -26,19 +26,18 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
 endif()
 
-# Include directories
+# Include directories - FIXED to match your structure
 include_directories(
     KittyMemory
-    Include
     Includes
-    Includes/Dobby
+    Include
+    Include/Dobby
     ImGui
     ImGui/backends
     xdl/include
     il2cpp
     il2cpp/src
     ${ANDROID_NDK}/sources/android/native_app_glue
-    ${ANDROID_NDK}/sources/third_party/vulkan/src/include   # Vulkan headers
 )
 
 # Source collection
@@ -46,14 +45,14 @@ file(GLOB_RECURSE XDL_SRC   CONFIGURE_DEPENDS xdl/*.c xdl/*.cpp)
 file(GLOB_RECURSE IL2CPP_SRC CONFIGURE_DEPENDS il2cpp/*.c il2cpp/*.cpp)
 
 set(MODULE_SRCS
-    ImGui/imgui.cpp
-    ImGui/imgui_draw.cpp
-    ImGui/imgui_demo.cpp
-    ImGui/imgui_widgets.cpp
-    ImGui/imgui_tables.cpp
+    ImGui/ImGui.cpp
+    ImGui/ImGui_draw.cpp
+    ImGui/ImGui_demo.cpp
+    ImGui/ImGui_widgets.cpp
+    ImGui/ImGui_tables.cpp
     ImGui/backends/imgui_impl_opengl3.cpp
     ImGui/backends/imgui_impl_android.cpp
-    ImGui/backends/imgui_impl_vulkan.cpp    # <-- ADDED BACK
+    # REMOVED: Vulkan backend
 
     KittyMemory/KittyArm64.cpp
     KittyMemory/KittyMemory.cpp
