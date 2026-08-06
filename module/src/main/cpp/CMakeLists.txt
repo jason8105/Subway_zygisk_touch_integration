@@ -29,9 +29,9 @@ endif()
 # Include directories - FIXED to match your structure
 include_directories(
     KittyMemory
-    Includes
     Include
-    Include/Dobby
+    Includes
+    Includes/Dobby
     ImGui
     ImGui/backends
     xdl/include
