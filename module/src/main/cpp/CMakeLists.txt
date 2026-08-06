@@ -45,11 +45,11 @@ file(GLOB_RECURSE XDL_SRC   CONFIGURE_DEPENDS xdl/*.c xdl/*.cpp)
 file(GLOB_RECURSE IL2CPP_SRC CONFIGURE_DEPENDS il2cpp/*.c il2cpp/*.cpp)
 
 set(MODULE_SRCS
-    ImGui/ImGui.cpp
-    ImGui/ImGui_draw.cpp
-    ImGui/ImGui_demo.cpp
-    ImGui/ImGui_widgets.cpp
-    ImGui/ImGui_tables.cpp
+    ImGui/imgui.cpp
+    ImGui/imgui_draw.cpp
+    ImGui/imgui_demo.cpp
+    ImGui/imgui_widgets.cpp
+    ImGui/imgui_tables.cpp
     ImGui/backends/imgui_impl_opengl3.cpp
     ImGui/backends/imgui_impl_android.cpp
     # REMOVED: Vulkan backend

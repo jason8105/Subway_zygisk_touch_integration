@@ -1,19 +1,15 @@
-#ifndef DRAWMENU
-#define DRAWMENU
+// SetUp.h
+#ifndef SETUP_H
+#define SETUP_H
 
-#include "il2cpp.h"
-
-// Helper to get IL2CPP method offset
-static uintptr_t GetMethodOffset(const char* dllName, const char* typeName, const char* methodName) {
-    // This is a simplified version - you'll need the actual Il2Cpp implementation
-    // for this to work properly. The KenzGUI version uses a full Il2Cpp API.
-    return 0; // Placeholder
-}
+#include "imgui.h"
+#include "backends/imgui_impl_opengl3.h"
+#include "backends/imgui_impl_android.h"
 
 void SetCorporateGrayTheme()
 {
-    ImGuiStyle & style = ImGui::GetStyle();
-    ImVec4 * colors = style.Colors;
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4* colors = style.Colors;
 
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
@@ -80,12 +76,8 @@ void SetGUI() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
-    // Get screen size from Unity Screen API or fallback
-    // For most Unity games, this works without Il2Cpp calls
-    io.DisplaySize = ImVec2(1080.0f, 1920.0f); // Default fallback
-    
-    // If you want real screen size, uncomment this:
-    // io.DisplaySize = ImVec2((float)ImGui::GetIO().DisplaySize.x, (float)ImGui::GetIO().DisplaySize.y);
+    // Default screen size (will be updated by eglQuerySurface later)
+    io.DisplaySize = ImVec2(1080.0f, 1920.0f);
     
     ImGuiStyle* style = &ImGui::GetStyle();
     style->WindowTitleAlign = ImVec2(0.5, 0.5);
@@ -93,7 +85,6 @@ void SetGUI() {
     
     SetCorporateGrayTheme();
     
-    // Initialize OpenGL ES backend
     ImGui_ImplOpenGL3_Init("#version 100");
     
     io.IniFilename = NULL;

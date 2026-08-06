@@ -103,18 +103,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     if (!setupimg) {
         LOGI("Initializing ImGui using KenzGUI method");
-        
-        // SetGUI() initializes ImGui with OpenGL ES backend
         SetGUI();
-        
-        // Initialize Android backend for touch input
         ImGui_ImplAndroid_Init(nullptr);
-        
         setupimg = true;
         LOGI("ImGui init OK");
     }
 
-    // Render ImGui
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
