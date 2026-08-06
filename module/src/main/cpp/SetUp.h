@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_android.h"
+#include <EGL/egl.h>
 
 void SetCorporateGrayTheme()
 {
@@ -71,13 +72,18 @@ void SetCorporateGrayTheme()
     style.GrabRounding      = 3;
 }
 
-void SetGUI() {
+void SetGUI(EGLDisplay dpy, EGLSurface surface) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
-    // Default screen size (will be updated by eglQuerySurface later)
-    io.DisplaySize = ImVec2(1080.0f, 1920.0f);
+    // Get screen size from EGL (safe - no IL2CPP, no crash)
+    EGLint w = 1080, h = 1920; // fallback defaults
+    if (dpy != EGL_NO_DISPLAY && surface != EGL_NO_SURFACE) {
+        eglQuerySurface(dpy, surface, EGL_WIDTH, &w);
+        eglQuerySurface(dpy, surface, EGL_HEIGHT, &h);
+    }
+    io.DisplaySize = ImVec2((float)w, (float)h);
     
     ImGuiStyle* style = &ImGui::GetStyle();
     style->WindowTitleAlign = ImVec2(0.5, 0.5);

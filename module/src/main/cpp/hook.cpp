@@ -101,13 +101,15 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         return EGL_FALSE;
     }
 
-    if (!setupimg) {
-        LOGI("Initializing ImGui using KenzGUI method");
-        SetGUI();
-        ImGui_ImplAndroid_Init(nullptr);
-        setupimg = true;
-        LOGI("ImGui init OK");
-    }
+// In hook_eglSwapBuffers, change:
+// In hook_eglSwapBuffers, change the init block:
+if (!setupimg) {
+    LOGI("Initializing ImGui using KenzGUI method");
+    SetGUI(dpy, surface);  // <-- pass EGL display/surface
+    ImGui_ImplAndroid_Init(nullptr);
+    setupimg = true;
+    LOGI("ImGui init OK");
+}
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame();
