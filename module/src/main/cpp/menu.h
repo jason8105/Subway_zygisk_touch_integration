@@ -7,6 +7,8 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include "il2cpp.h"
+#include "functions.h"
+#include "hook.h"
 
 extern int glWidth, glHeight;
 extern bool setupimg;
