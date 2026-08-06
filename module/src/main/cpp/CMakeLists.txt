@@ -41,10 +41,6 @@ include_directories(
     xdl/include
     il2cpp
     il2cpp/src
-    Renderer
-    Renderer/OpenGL
-    Renderer/Vulkan
-    Renderer/Input
     ${ANDROID_NDK}/sources/third_party/vulkan/src/include   # Vulkan headers (NDK)
 )
 
@@ -53,7 +49,6 @@ include_directories(
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE XDL_SRC   CONFIGURE_DEPENDS xdl/*.c xdl/*.cpp)
 file(GLOB_RECURSE IL2CPP_SRC CONFIGURE_DEPENDS il2cpp/*.c il2cpp/*.cpp)
-file(GLOB_RECURSE RENDERER_SRC CONFIGURE_DEPENDS Renderer/*.cpp)
 
 set(MODULE_SRCS
     ImGui/imgui.cpp
@@ -63,6 +58,7 @@ set(MODULE_SRCS
     ImGui/imgui_tables.cpp
     ImGui/backends/imgui_impl_opengl3.cpp
     ImGui/backends/imgui_impl_android.cpp
+    ImGui/backends/imgui_impl_vulkan.cpp    # <-- Vulkan backend
 
     KittyMemory/KittyArm64.cpp
     KittyMemory/KittyMemory.cpp
@@ -77,7 +73,6 @@ set(MODULE_SRCS
 
     ${XDL_SRC}
     ${IL2CPP_SRC}
-    ${RENDERER_SRC}
 )
 
 add_library(${MODULE_NAME} SHARED ${MODULE_SRCS})
@@ -89,21 +84,13 @@ set(DOBBY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libdobb
 set(CURL_LIB  ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libcurl.a)
 
 # ---------------------------------------------------------------------------
-#  System libraries
+#  System libraries (no Vulkan linking – we use dlopen at runtime)
 # ---------------------------------------------------------------------------
 find_library(LOG_LIB   log)
 find_library(EGL_LIB   EGL)
 find_library(ANDROID_LIB android)
 find_library(GLESV2_LIB GLESv2)
 find_library(Z_LIB     z)
-
-# Vulkan library – search in NDK sysroot for the target ABI
-find_library(VULKAN_LIB vulkan PATHS ${CMAKE_SYSROOT}/usr/lib NO_DEFAULT_PATH)
-if(NOT VULKAN_LIB)
-    message(WARNING "Vulkan library not found – Vulkan support will be disabled")
-    # Optionally, you can set a dummy empty string to avoid linker errors
-    set(VULKAN_LIB "")
-endif()
 
 if (ANDROID_PLATFORM_LEVEL LESS 12)
     message(FATAL_ERROR "OpenGL ES 2.0 requires API level 12+")
@@ -118,7 +105,6 @@ target_link_libraries(${MODULE_NAME}
     ${LOG_LIB}
     ${DOBBY_LIB}
     ${CURL_LIB}
-    ${VULKAN_LIB}
     ${OPENGL_LIB}
     ${GLESV2_LIB}
     ${EGL_LIB}
