@@ -7,18 +7,18 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+#include <android_native_app_glue.h>   // for android_app struct
 
 #include <android/log.h>
 #include <pthread.h>
-
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 #include "dobby.h"
 
 // ImGui
 #include "imgui.h"
-#include "backends/imgui_impl_vulkan.h"
+#include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_android.h"
 
 #include "KittyMemory/KittyMemory.h"
@@ -41,11 +41,13 @@ char* game_data_dir = nullptr;
 KittyMemory::ProcMap g_il2cppBaseMap;
 bool setupimg = false;
 
-// Vulkan state (simplified – we only need queue and device for ImGui)
-static VkQueue g_vkQueue = VK_NULL_HANDLE;
-static VkDevice g_vkDevice = VK_NULL_HANDLE;
-static VkPhysicalDevice g_vkPhysicalDevice = VK_NULL_HANDLE;
-static VkInstance g_vkInstance = VK_NULL_HANDLE;
+// OpenGL state
+static EGLDisplay g_eglDisplay = EGL_NO_DISPLAY;
+static EGLSurface g_eglSurface = EGL_NO_SURFACE;
+
+// Touch input state
+static struct android_app* g_app = nullptr;
+static int32_t (*old_onInputEvent)(struct android_app* app, AInputEvent* event);
 
 // ---------------------------------------------------------------------------
 //  Function bodies
@@ -77,95 +79,89 @@ void Hooks() {
 }
 
 // ---------------------------------------------------------------------------
-//  Vulkan hook: vkQueuePresentKHR
+//  Touch input hook (replaces android_app::onInputEvent)
 // ---------------------------------------------------------------------------
-static VkResult (*old_vkQueuePresentKHR)(VkQueue, const VkPresentInfoKHR*) = nullptr;
+int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
+    // Forward event to ImGui
+    if (ImGui_ImplAndroid_HandleInputEvent(event)) {
+        // ImGui consumed the event – block game from receiving it
+        return 1;
+    }
+    // Otherwise, let the game handle it
+    return old_onInputEvent(app, event);
+}
 
-VkResult hook_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) {
-    LOGI("hook_vkQueuePresentKHR called, setupimg=%d", setupimg);
+// ---------------------------------------------------------------------------
+//  Hook android_main to capture android_app pointer and replace onInputEvent
+// ---------------------------------------------------------------------------
+static void (*old_android_main)(struct android_app* app);
+void hook_android_main(struct android_app* app) {
+    LOGI("android_main hooked, capturing app=%p", (void*)app);
+    g_app = app;
+    // Save original onInputEvent
+    old_onInputEvent = app->onInputEvent;
+    // Replace with our hook
+    app->onInputEvent = hook_onInputEvent;
+    // Call original main
+    old_android_main(app);
+}
 
-    // Capture queue and device (we'll get device from queue later)
-    if (g_vkQueue == VK_NULL_HANDLE) {
-        g_vkQueue = queue;
-        // Get device from queue (requires vkGetDeviceQueue, but we can store it from elsewhere)
-        // For simplicity, we'll set up ImGui when we have device info
+// ---------------------------------------------------------------------------
+//  OpenGL ES hook: eglSwapBuffers
+// ---------------------------------------------------------------------------
+static EGLBoolean (*old_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
+
+EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    // Store display/surface for later use
+    if (g_eglDisplay == EGL_NO_DISPLAY) {
+        g_eglDisplay = dpy;
+        g_eglSurface = surface;
     }
 
     // Initialize ImGui on first call
-    if (!setupimg && g_vkDevice != VK_NULL_HANDLE) {
-        LOGI("Initializing ImGui for Vulkan");
+    if (!setupimg) {
+        LOGI("Initializing ImGui for OpenGL ES");
+
+        // Get screen size from EGL
+        EGLint w, h;
+        eglQuerySurface(dpy, surface, EGL_WIDTH, &w);
+        eglQuerySurface(dpy, surface, EGL_HEIGHT, &h);
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = ImVec2((float)w, (float)h);
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
         io.Fonts->AddFontDefault();
         ImGui::StyleColorsDark();
 
-        ImGui_ImplVulkan_InitInfo init_info = {};
-        init_info.Instance = g_vkInstance;
-        init_info.PhysicalDevice = g_vkPhysicalDevice;
-        init_info.Device = g_vkDevice;
-        init_info.QueueFamily = 0; // You need the correct queue family index
-        init_info.Queue = g_vkQueue;
-        init_info.PipelineCache = VK_NULL_HANDLE;
-        init_info.DescriptorPool = VK_NULL_HANDLE; // Create a descriptor pool
-        init_info.Allocator = nullptr;
-        init_info.MinImageCount = 2;
-        init_info.ImageCount = 2;
-        init_info.CheckVkResultFn = nullptr;
-        init_info.RenderPass = VK_NULL_HANDLE; // Need to get from game
-
-        if (ImGui_ImplVulkan_Init(&init_info)) {
+        // Init OpenGL3 backend
+        if (ImGui_ImplOpenGL3_Init("#version 300 es")) {
+            // Init Android backend (handles touch input via AInputEvent)
             ImGui_ImplAndroid_Init(nullptr);
             setupimg = true;
-            LOGI("ImGui Vulkan init OK");
+            LOGI("ImGui OpenGL ES init OK");
         } else {
-            LOGE("ImGui_ImplVulkan_Init failed");
+            LOGE("ImGui_ImplOpenGL3_Init failed");
         }
     }
 
-    if (!setupimg) {
-        return old_vkQueuePresentKHR ? old_vkQueuePresentKHR(queue, pPresentInfo) : VK_SUCCESS;
-    }
+    // Call original (game renders its frame)
+    EGLBoolean result = old_eglSwapBuffers(dpy, surface);
 
-    // ImGui frame
-    ImGui_ImplVulkan_NewFrame();
+    // Render ImGui overlay
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
     if (menuVisible) {
-        LOGI("hook_vkQueuePresentKHR: rendering menu");
         RenderMenu();
     }
 
     ImGui::Render();
-    // Submit draw data – you need a command buffer
-    // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    glViewport(0, 0, (int)ImGui::GetIO().DisplaySize.x, (int)ImGui::GetIO().DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    return old_vkQueuePresentKHR ? old_vkQueuePresentKHR(queue, pPresentInfo) : VK_SUCCESS;
-}
-
-// ---------------------------------------------------------------------------
-//  Additional Vulkan hooks to capture device and instance
-// ---------------------------------------------------------------------------
-static VkResult (*old_vkCreateDevice)(VkPhysicalDevice, const VkDeviceCreateInfo*, const VkAllocationCallbacks*, VkDevice*) = nullptr;
-VkResult hook_vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) {
-    VkResult result = old_vkCreateDevice(physicalDevice, pCreateInfo, pAllocator, pDevice);
-    if (result == VK_SUCCESS) {
-        g_vkPhysicalDevice = physicalDevice;
-        g_vkDevice = *pDevice;
-        LOGI("Captured VkDevice: %p", (void*)g_vkDevice);
-    }
-    return result;
-}
-
-static VkResult (*old_vkCreateInstance)(const VkInstanceCreateInfo*, const VkAllocationCallbacks*, VkInstance*) = nullptr;
-VkResult hook_vkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
-    VkResult result = old_vkCreateInstance(pCreateInfo, pAllocator, pInstance);
-    if (result == VK_SUCCESS) {
-        g_vkInstance = *pInstance;
-        LOGI("Captured VkInstance: %p", (void*)g_vkInstance);
-    }
     return result;
 }
 
@@ -210,20 +206,26 @@ int isGame(JNIEnv* env, jstring appDataDir) {
 void* hack_thread(void* /*arg*/) {
     LOGI("hack_thread started");
 
-    // Wait for libvulkan.so and hook Vulkan functions
+    // Hook android_main to capture app and replace onInputEvent
     while (true) {
-        sleep(1);
-        void* vkCreateInstanceAddr = dlsym(RTLD_DEFAULT, "vkCreateInstance");
-        void* vkCreateDeviceAddr = dlsym(RTLD_DEFAULT, "vkCreateDevice");
-        void* vkQueuePresentKHRAddr = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
-        if (vkCreateInstanceAddr && vkCreateDeviceAddr && vkQueuePresentKHRAddr) {
-            LOGI("Vulkan functions found, hooking...");
-            DobbyHook(vkCreateInstanceAddr, (void*)hook_vkCreateInstance, (void**)&old_vkCreateInstance);
-            DobbyHook(vkCreateDeviceAddr, (void*)hook_vkCreateDevice, (void**)&old_vkCreateDevice);
-            DobbyHook(vkQueuePresentKHRAddr, (void*)hook_vkQueuePresentKHR, (void**)&old_vkQueuePresentKHR);
-            LOGI("Vulkan hooks installed");
+        void* android_main_addr = dlsym(RTLD_DEFAULT, "android_main");
+        if (android_main_addr) {
+            DobbyHook(android_main_addr, (void*)hook_android_main, (void**)&old_android_main);
+            LOGI("android_main hooked");
             break;
         }
+        sleep(1);
+    }
+
+    // Hook eglSwapBuffers for rendering
+    while (true) {
+        void* eglSwapAddr = dlsym(RTLD_DEFAULT, "eglSwapBuffers");
+        if (eglSwapAddr) {
+            DobbyHook(eglSwapAddr, (void*)hook_eglSwapBuffers, (void**)&old_eglSwapBuffers);
+            LOGI("eglSwapBuffers hooked");
+            break;
+        }
+        sleep(1);
     }
 
     // Wait for libil2cpp.so (if needed for IL2CPP hooks)

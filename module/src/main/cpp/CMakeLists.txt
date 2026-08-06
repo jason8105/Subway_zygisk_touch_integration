@@ -41,7 +41,6 @@ include_directories(
     xdl/include
     il2cpp
     il2cpp/src
-    ${ANDROID_NDK}/sources/third_party/vulkan/src/include   # Vulkan headers (NDK)
 )
 
 # ---------------------------------------------------------------------------
@@ -58,7 +57,7 @@ set(MODULE_SRCS
     ImGui/imgui_tables.cpp
     ImGui/backends/imgui_impl_opengl3.cpp
     ImGui/backends/imgui_impl_android.cpp
-    ImGui/backends/imgui_impl_vulkan.cpp    # <-- Vulkan backend
+    # Vulkan backend removed
 
     KittyMemory/KittyArm64.cpp
     KittyMemory/KittyMemory.cpp
@@ -84,7 +83,7 @@ set(DOBBY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libdobb
 set(CURL_LIB  ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libcurl.a)
 
 # ---------------------------------------------------------------------------
-#  System libraries (no Vulkan linking – we use dlopen at runtime)
+#  System libraries
 # ---------------------------------------------------------------------------
 find_library(LOG_LIB   log)
 find_library(EGL_LIB   EGL)
