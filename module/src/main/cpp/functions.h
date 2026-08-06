@@ -2,17 +2,36 @@
 #define ZYCHEATS_SGUYS_FUNCTIONS_H
 
 #include <jni.h>
+#include <android/log.h>
 #include <dobby.h>
+#include <thread>
+#include <chrono>
 #include "il2cpp.h"
+#include "il2cpp_hook.h"
 #include "xdl.h"
 
-// The variable is defined in hook.cpp – only declare it here.
-extern bool stopZ;
+bool stopZ = false; 
 
-// Forward declarations (implemented in hook.cpp)
-void Pointers();
-void Patches();
-void InitWorker();
-void Hooks();
+void Pointers() {}
+void Patches() {}
 
-#endif // ZYCHEATS_SGUYS_FUNCTIONS_H
+// Background worker thread - only resolve function pointers, DO NOT get domain
+void InitWorker() {
+    // 1. Wait safely for libil2cpp.so to load
+    while (!IL2CPP::il2cpp_base) {
+        if (IL2CPP::Init()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // DO NOT call il2cpp_domain_get() here - it will crash
+    // Domain is obtained later when actually needed
+    
+    LOGI("InitWorker() done - IL2CPP functions resolved");
+}
+
+void Hooks() {
+    // Spawn detached thread so game startup is not blocked
+    std::thread(InitWorker).detach();
+}
+
+#endif //ZYCHEATS_SGUYS_FUNCTIONS_H

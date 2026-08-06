@@ -1,3 +1,4 @@
+#include <cstring>
 #include <jni.h>
 #include <pthread.h>
 #include "hook.h"
@@ -10,30 +11,30 @@ using zygisk::AppSpecializeArgs;
 
 class MyModule : public zygisk::ModuleBase {
 public:
-    void onLoad(Api* api, JNIEnv* env) override {
-        this->api_ = api;
-        this->env_ = env;
-        LOGI("onLoad: api_=%p", (void*)api_);
+    void onLoad(Api *api, JNIEnv *env) override {
+        env_ = env;
     }
 
-    void preAppSpecialize(AppSpecializeArgs* args) override {
-        if (!args || !args->nice_name) return;
+    void preAppSpecialize(AppSpecializeArgs *args) override {
+        if (!args || !args->nice_name) {
+            LOGE("Skip unknown process");
+            return;
+        }
         enable_hack = isGame(env_, args->app_data_dir);
-        LOGI("preAppSpecialize: enable_hack=%d, api_=%p", enable_hack, (void*)api_);
     }
 
-    void postAppSpecialize(const AppSpecializeArgs*) override {
-        LOGI("postAppSpecialize: enable_hack=%d, api_=%p", enable_hack, (void*)api_);
+    void postAppSpecialize(const AppSpecializeArgs *) override {
         if (enable_hack) {
-            pthread_t th;
-            pthread_create(&th, nullptr, hack_thread, nullptr);
-            pthread_detach(th);
+            int ret;
+            pthread_t ntid;
+            if ((ret = pthread_create(&ntid, nullptr, hack_thread, nullptr))) {
+                LOGE("can't create thread: %s\n", strerror(ret));
+            }
         }
     }
 
 private:
-    Api*        api_ = nullptr;
-    JNIEnv*     env_ = nullptr;
+    JNIEnv *env_{};
 };
 
 REGISTER_ZYGISK_MODULE(MyModule)

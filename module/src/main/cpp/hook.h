@@ -1,20 +1,19 @@
-#ifndef ZYGISK_IMGUI_HOOK_H
-#define ZYGISK_IMGUI_HOOK_H
+#ifndef ZygiskImGui_HOOK_H
+#define ZygiskImGui_HOOK_H
 
 #include <jni.h>
-#include "zygisk.hpp"
 #include <android/log.h>
+
+static int enable_hack = 0;
+static char *game_data_dir = NULL;
+
+int isGame(JNIEnv *env, jstring appDataDir);
+void *hack_thread(void *arg);
 
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-extern int        enable_hack;
-extern char*      game_data_dir;
-
-int  isGame(JNIEnv* env, jstring appDataDir);
-void* hack_thread(void* arg);
-
-#endif // ZYGISK_IMGUI_HOOK_H
+#endif //ZygiskImGui_HOOK_H
