@@ -20,14 +20,15 @@
 #include "hook.h"
 #include "functions.h"
 #include "menu.h"
+#include "il2cpp.h"
 
 #define GamePackageName "com.innersloth.spacemafia"
 
 // ADD THIS LINE:
 ProcMap g_il2cppBaseMap;   // <-- definition of the extern variable
 
-int glHeight, glWidth;
-bool setupimg = false;
+extern int glWidth, glHeight;
+extern bool setupimg;
 
 int isGame(JNIEnv *env, jstring appDataDir)
 {
