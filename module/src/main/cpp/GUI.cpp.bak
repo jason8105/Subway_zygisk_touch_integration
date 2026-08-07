@@ -112,7 +112,6 @@ void DrawKenzGUIMenu() {
 // ---------------------------------------------------------------------------
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    LOGI("hook_eglSwapBuffers CALLED!");   // <-- ADD THIS
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
