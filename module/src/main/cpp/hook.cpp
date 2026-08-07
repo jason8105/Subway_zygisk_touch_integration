@@ -58,20 +58,17 @@ int isGame(JNIEnv *env, jstring appDataDir)
 }
 
 void *hack_thread(void *arg) {
-    // Wait for libil2cpp.so
     do {
         sleep(1);
         g_il2cppBaseMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
     } while (!g_il2cppBaseMap.isValid());
     LOGI("il2cpp base: %p", (void*)(g_il2cppBaseMap.startAddress));
     
-    // Start IL2CPP init in background (function pointers only, no domain)
-    Pointers();
-    Hooks();
+    // REMOVE Pointers() and Hooks() calls
     
-    // Wait for IL2CPP domain to be ready (for KenzGUI method)
-    // This runs in the background and doesn't block the overlay
+    // Wait for IL2CPP domain
     std::thread([]() {
+        IL2CPP::Init();  // <-- Call Init() HERE, not in a background thread
         for (int i = 0; i < 30; i++) {
             if (IL2CPP::API::il2cpp_domain_get != nullptr) {
                 IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
@@ -83,17 +80,15 @@ void *hack_thread(void *arg) {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        LOGW("KenzGUI: Failed to get IL2CPP domain - using EGL fallback");
+        LOGW("KenzGUI: Failed to get IL2CPP domain");
     }).detach();
     
-    // Hook eglSwapBuffers using RTLD_NEXT (KenzGUI method)
+    // Hook eglSwapBuffers using RTLD_NEXT
     auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
     if (eglSwapBuffers) {
         DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
                   (void**)&old_eglSwapBuffers);
         LOGI("eglSwapBuffers hooked via RTLD_NEXT");
-    } else {
-        LOGW("eglSwapBuffers not found via RTLD_NEXT");
     }
     
     LOGI("Draw Done!");

@@ -11,22 +11,11 @@
 #include "il2cpp_hook.h"
 #include "xdl.h"
 
-inline bool stopZ = false;   // <-- add inline
+inline bool stopZ = false;
 
-inline void Pointers() {}    // <-- add inline
-inline void Patches() {}     // <-- add inline
+inline void Pointers() {}
+inline void Patches() {}
 
-// Background worker thread - only resolve function pointers, DO NOT get domain
-inline void InitWorker() {   // <-- add inline
-    while (!IL2CPP::il2cpp_base) {
-        if (IL2CPP::Init()) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-    LOGI("InitWorker() done - IL2CPP functions resolved");
-}
-
-inline void Hooks() {        // <-- add inline
-    std::thread(InitWorker).detach();
-}
+// REMOVED InitWorker() and Hooks() - they cause crashes
 
 #endif //ZYCHEATS_SGUYS_FUNCTIONS_H
