@@ -67,21 +67,22 @@ void *hack_thread(void *arg) {
     // REMOVE Pointers() and Hooks() calls
     
     // Wait for IL2CPP domain
-    std::thread([]() {
-        IL2CPP::Init();  // <-- Call Init() HERE, not in a background thread
-        for (int i = 0; i < 30; i++) {
-            if (IL2CPP::API::il2cpp_domain_get != nullptr) {
-                IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
-                if (IL2CPP::domain != nullptr) {
-                    LOGI("KenzGUI: IL2CPP Domain obtained: %p", IL2CPP::domain);
-                    IL2CPP::Attach();
-                    return;
-                }
+std::thread([]() {
+    sleep(20);  // Wait 10 seconds for game to fully initialize
+    IL2CPP::Init();  // Now safe to call
+    for (int i = 0; i < 30; i++) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
+            if (IL2CPP::domain != nullptr) {
+                LOGI("KenzGUI: IL2CPP Domain obtained: %p", IL2CPP::domain);
+                IL2CPP::Attach();
+                return;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        LOGW("KenzGUI: Failed to get IL2CPP domain");
-    }).detach();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    LOGW("KenzGUI: Failed to get IL2CPP domain");
+}).detach();
     
     // Hook eglSwapBuffers using RTLD_NEXT
     auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
