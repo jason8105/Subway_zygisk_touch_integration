@@ -23,6 +23,9 @@
 
 #define GamePackageName "com.innersloth.spacemafia"
 
+// ADD THIS LINE:
+ProcMap g_il2cppBaseMap;   // <-- definition of the extern variable
+
 int glHeight, glWidth;
 bool setupimg = false;
 
