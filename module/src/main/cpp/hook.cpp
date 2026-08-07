@@ -184,8 +184,12 @@ void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLCo
     // Always call the original first
     old_eglMakeCurrent(dpy, draw, read, ctx);
     
+    // Log every call to see if it's being triggered
+    LOGI("hook_eglMakeCurrent called: ctx=%p draw=%p", ctx, draw);
+    
     // Render ImGui if we have a valid context and surface
     if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
+        LOGI("hook_eglMakeCurrent: valid context");
         if (!setupimg) {
             SetupImgui();
             setupimg = true;
