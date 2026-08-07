@@ -19,6 +19,7 @@ extern EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
 extern void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 extern void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 
+/*
 // OpenGL ES hooks
 extern void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void* indices);
 extern void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices);
@@ -27,10 +28,11 @@ extern void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const v
 extern void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
 extern void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo);
 
+
 // Android native window hook
 extern void (*old_ANativeWindow_lock)(void* window, void* outBuffer, void* inOutDirtyBounds);
 extern void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBounds);
-
+*/
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)

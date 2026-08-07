@@ -107,6 +107,7 @@ void *hack_thread(void *arg) {
         LOGI("vkQueuePresentKHR hooked");
     }
     
+    /*
     // Hook ANativeWindow_lock
     auto nativeWindowLock = dlsym(RTLD_DEFAULT, "ANativeWindow_lock");
     if (nativeWindowLock) {
@@ -114,6 +115,7 @@ void *hack_thread(void *arg) {
                   (void**)&old_ANativeWindow_lock);
         LOGI("ANativeWindow_lock hooked");
     }
+    */
     
     // Hook eglMakeCurrent
     auto eglMakeCurrent = dlsym(RTLD_DEFAULT, "eglMakeCurrent");
