@@ -2,7 +2,7 @@
 #include "menu.h"
 #include "il2cpp.h"
 #include "Includes/Dobby/dobby.h"
-#include "Includes/obfuscate.h"
+#include "Include/obfuscate.h"
 #include "KittyMemory/KittyMemory.h"
 #include "ImGui/imgui.h"
 #include "ImGui/backends/imgui_impl_android.h"
