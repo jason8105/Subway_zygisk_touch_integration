@@ -1,8 +1,8 @@
-#define _GNU_SOURCE
+#define _GNU_SOURCE    // <-- ADD THIS FIRST
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
-#include <dlfcn.h>
+#include <dlfcn.h>     // <-- RTLD_NEXT will now be available
 #include <cstdlib>
 #include <cinttypes>
 #include <string>
@@ -25,7 +25,9 @@
 
 #define GamePackageName "com.innersloth.spacemafia"
 
-ProcMap g_il2cppBaseMap;
+// ADD THIS LINE:
+ProcMap g_il2cppBaseMap;   // <-- definition of the extern variable
+
 int glWidth, glHeight;
 bool setupimg = false;
 
@@ -61,39 +63,35 @@ void *hack_thread(void *arg) {
         g_il2cppBaseMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
     } while (!g_il2cppBaseMap.isValid());
     LOGI("il2cpp base: %p", (void*)(g_il2cppBaseMap.startAddress));
-
-    std::thread([]() {
-        sleep(20);
-        IL2CPP::Init();
-        for (int i = 0; i < 30; i++) {
-            if (IL2CPP::API::il2cpp_domain_get != nullptr) {
-                IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
-                if (IL2CPP::domain != nullptr) {
-                    LOGI("KenzGUI: IL2CPP Domain obtained: %p", IL2CPP::domain);
-                    IL2CPP::Attach();
-                    return;
-                }
+    
+    // REMOVE Pointers() and Hooks() calls
+    
+    // Wait for IL2CPP domain
+std::thread([]() {
+    sleep(20);  // Wait 10 seconds for game to fully initialize
+    IL2CPP::Init();  // Now safe to call
+    for (int i = 0; i < 30; i++) {
+        if (IL2CPP::API::il2cpp_domain_get != nullptr) {
+            IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
+            if (IL2CPP::domain != nullptr) {
+                LOGI("KenzGUI: IL2CPP Domain obtained: %p", IL2CPP::domain);
+                IL2CPP::Attach();
+                return;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        LOGW("KenzGUI: Failed to get IL2CPP domain");
-    }).detach();
-
-    auto glDrawElements = dlsym(RTLD_NEXT, "glDrawElements");
-    if (glDrawElements) {
-        DobbyHook((void*)glDrawElements, (void*)hook_glDrawElements,
-                  (void**)&old_glDrawElements);
-        LOGI("glDrawElements hooked via RTLD_NEXT");
-    } else {
-        LOGW("glDrawElements not found - trying eglSwapBuffers");
-        auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
-        if (eglSwapBuffers) {
-            DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
-                      (void**)&old_eglSwapBuffers);
-            LOGI("eglSwapBuffers hooked via RTLD_NEXT (fallback)");
-        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-
+    LOGW("KenzGUI: Failed to get IL2CPP domain");
+}).detach();
+    
+    // Hook eglSwapBuffers using RTLD_NEXT
+    auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
+    if (eglSwapBuffers) {
+        DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
+                  (void**)&old_eglSwapBuffers);
+        LOGI("eglSwapBuffers hooked via RTLD_NEXT");
+    }
+    
     LOGI("Draw Done!");
     return nullptr;
 }
