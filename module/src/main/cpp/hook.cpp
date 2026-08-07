@@ -29,6 +29,40 @@ ProcMap g_il2cppBaseMap;
 int glWidth, glHeight;
 bool setupimg = false;
 
+void DumpAvailableSymbols() {
+    LOGI("=== Dumping available symbols ===");
+    
+    // Check which libraries are loaded
+    const char* libs[] = {"libunity.so", "libEGL.so", "libGLESv2.so", "libvulkan.so", "libnativewindow.so"};
+    for (auto lib : libs) {
+        auto handle = dlopen(lib, RTLD_LAZY | RTLD_NOLOAD);
+        if (handle) {
+            LOGI("Library loaded: %s", lib);
+            dlclose(handle);
+        } else {
+            LOGI("Library NOT loaded: %s", lib);
+        }
+    }
+    
+    // Check specific symbols
+    const char* symbols[] = {
+        "eglSwapBuffers", "glDrawElements", "glDrawArrays",
+        "vkQueuePresentKHR", "vkQueueSubmit", "vkAcquireNextImageKHR",
+        "ANativeWindow_lock", "eglMakeCurrent"
+    };
+    
+    for (auto sym : symbols) {
+        auto ptr = dlsym(RTLD_DEFAULT, sym);
+        if (ptr) {
+            LOGI("Symbol found: %s at %p", sym, ptr);
+        } else {
+            LOGI("Symbol NOT found: %s", sym);
+        }
+    }
+    
+    LOGI("=== Dump complete ===");
+}
+
 int isGame(JNIEnv *env, jstring appDataDir)
 {
     if (!appDataDir)
@@ -56,6 +90,8 @@ int isGame(JNIEnv *env, jstring appDataDir)
 }
 
 void *hack_thread(void *arg) {
+    DumpAvailableSymbols();  // <-- ADD THIS LINE
+    
     do {
         sleep(1);
         g_il2cppBaseMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
