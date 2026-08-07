@@ -17,7 +17,6 @@
 extern int glWidth, glHeight;
 extern bool setupimg;
 
-// Rest of GUI.cpp...
 
 // Unity structs for touch handling
 struct UnityEngine_Vector2_Fields {

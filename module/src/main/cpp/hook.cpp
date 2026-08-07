@@ -27,8 +27,8 @@
 // ADD THIS LINE:
 ProcMap g_il2cppBaseMap;   // <-- definition of the extern variable
 
-extern int glWidth, glHeight;
-extern bool setupimg;
+int glWidth, glHeight;
+bool setupimg = false;
 
 int isGame(JNIEnv *env, jstring appDataDir)
 {
