@@ -486,17 +486,37 @@ void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLCo
         LOGI("CALLED: eglMakeCurrent #%d (TID: %d)", frameCount_eglMakeCurrent, gettid());
     }
     
-    // Only set up ImGui once we have a valid context
-    if (ctx != EGL_NO_CONTEXT && !setupimg) {
+    // Always call the original first
+    old_eglMakeCurrent(dpy, draw, read, ctx);
+    
+    // Render ImGui if we have a valid context and surface with proper size
+    if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
         EGLint w = 1080, h = 1920;
-        if (draw != EGL_NO_SURFACE) {
-            eglQuerySurface(dpy, draw, EGL_WIDTH, &w);
-            eglQuerySurface(dpy, draw, EGL_HEIGHT, &h);
-        }
+        eglQuerySurface(dpy, draw, EGL_WIDTH, &w);
+        eglQuerySurface(dpy, draw, EGL_HEIGHT, &h);
         glWidth = w;
         glHeight = h;
-        LOGI("eglMakeCurrent: screen %dx%d, context %p", w, h, ctx);
+        
+        // Only set up ImGui once we have a real screen size
+        if (w > 100 && h > 100 && !setupimg) {
+            LOGI("Setting up ImGui from eglMakeCurrent - screen %dx%d", w, h);
+            SetupImgui();
+            setupimg = true;
+        }
+        
+        // Render ImGui every frame
+        if (setupimg) {
+            ImGuiIO &io = ImGui::GetIO();
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplAndroid_NewFrame();
+            ImGui::NewFrame();
+            
+            DrawKenzGUIMenu();
+            Patches();
+            
+            ImGui::Render();
+            glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        }
     }
-    
-    old_eglMakeCurrent(dpy, draw, read, ctx);
 }
