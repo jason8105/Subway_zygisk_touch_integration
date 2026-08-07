@@ -79,7 +79,7 @@ void *hack_thread(void *arg) {
         LOGW("Failed to get IL2CPP domain");
     }).detach();
 
-    // Hook eglSwapBuffers (may not be called, but try)
+    // Hook eglSwapBuffers
     auto eglHandle = dlopen("libEGL.so", RTLD_LAZY);
     if (eglHandle) {
         auto eglSwapBuffers = dlsym(eglHandle, "eglSwapBuffers");
@@ -90,8 +90,34 @@ void *hack_thread(void *arg) {
         }
         dlclose(eglHandle);
     }
-
-    // Hook eglMakeCurrent (this is the one that gets called)
+    
+    // Hook glDrawElements
+    auto glDrawElements = dlsym(RTLD_DEFAULT, "glDrawElements");
+    if (glDrawElements) {
+        DobbyHook((void*)glDrawElements, (void*)hook_glDrawElements,
+                  (void**)&old_glDrawElements);
+        LOGI("glDrawElements hooked");
+    }
+    
+    // Hook vkQueuePresentKHR
+    auto vkQueuePresentKHR = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
+    if (vkQueuePresentKHR) {
+        DobbyHook((void*)vkQueuePresentKHR, (void*)hook_vkQueuePresentKHR,
+                  (void**)&old_vkQueuePresentKHR);
+        LOGI("vkQueuePresentKHR hooked");
+    }
+    
+    /*
+    // Hook ANativeWindow_lock
+    auto nativeWindowLock = dlsym(RTLD_DEFAULT, "ANativeWindow_lock");
+    if (nativeWindowLock) {
+        DobbyHook((void*)nativeWindowLock, (void*)hook_ANativeWindow_lock,
+                  (void**)&old_ANativeWindow_lock);
+        LOGI("ANativeWindow_lock hooked");
+    }
+    */
+    
+    // Hook eglMakeCurrent
     auto eglMakeCurrent = dlsym(RTLD_DEFAULT, "eglMakeCurrent");
     if (eglMakeCurrent) {
         DobbyHook((void*)eglMakeCurrent, (void*)hook_eglMakeCurrent,
@@ -177,6 +203,93 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     
     return old_eglSwapBuffers(dpy, surface);
+}
+
+void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void* indices);
+void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
+    static bool setup = false;
+    if (!setup) {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO &io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(1080, 1920);
+        ImGui_ImplOpenGL3_Init("#version 100");
+        io.Fonts->AddFontDefault();
+        ImGui_ImplAndroid_Init(nullptr);
+        setup = true;
+    }
+    
+    ImGuiIO &io = ImGui::GetIO();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplAndroid_NewFrame();
+    ImGui::NewFrame();
+    
+    DrawKenzGUIMenu();
+    Patches();
+    
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    old_glDrawElements(mode, count, type, indices);
+}
+
+void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
+void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
+    static bool setup = false;
+    if (!setup) {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO &io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(1080, 1920);
+        ImGui_ImplOpenGL3_Init("#version 100");
+        io.Fonts->AddFontDefault();
+        ImGui_ImplAndroid_Init(nullptr);
+        setup = true;
+    }
+    
+    ImGuiIO &io = ImGui::GetIO();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplAndroid_NewFrame();
+    ImGui::NewFrame();
+    
+    DrawKenzGUIMenu();
+    Patches();
+    
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    old_vkQueuePresentKHR(queue, pPresentInfo);
+}
+
+void (*old_ANativeWindow_lock)(void* window, void* outBuffer, void* inOutDirtyBounds);
+void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBounds) {
+    static bool setup = false;
+    if (!setup) {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO &io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(1080, 1920);
+        ImGui_ImplOpenGL3_Init("#version 100");
+        io.Fonts->AddFontDefault();
+        ImGui_ImplAndroid_Init(nullptr);
+        setup = true;
+    }
+    
+    ImGuiIO &io = ImGui::GetIO();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplAndroid_NewFrame();
+    ImGui::NewFrame();
+    
+    DrawKenzGUIMenu();
+    Patches();
+    
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    old_ANativeWindow_lock(window, outBuffer, inOutDirtyBounds);
 }
 
 void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
