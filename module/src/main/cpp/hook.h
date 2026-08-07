@@ -12,14 +12,24 @@ static char *game_data_dir = NULL;
 int isGame(JNIEnv *env, jstring appDataDir);
 void *hack_thread(void *arg);
 
+// EGL hooks
 extern EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
 extern EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
 
+extern void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
+extern void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
+
+// OpenGL ES hooks
 extern void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void* indices);
 extern void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices);
 
+// Vulkan hooks
 extern void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
 extern void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo);
+
+// Android native window hook
+extern void (*old_ANativeWindow_lock)(void* window, void* outBuffer, void* inOutDirtyBounds);
+extern void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBounds);
 
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
