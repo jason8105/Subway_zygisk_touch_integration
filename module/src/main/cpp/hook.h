@@ -18,6 +18,9 @@ extern EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
 extern void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void* indices);
 extern void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices);
 
+extern void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
+extern void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo);
+
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)

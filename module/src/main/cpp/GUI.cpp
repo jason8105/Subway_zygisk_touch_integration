@@ -166,7 +166,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui::NewFrame();
 
     DrawKenzGUIMenu();
-
     Patches();
 
     ImGui::Render();
@@ -204,4 +203,34 @@ void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* in
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     
     old_glDrawElements(mode, count, type, indices);
+}
+
+void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
+void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
+    static bool setup = false;
+    if (!setup) {
+        LOGI("vkQueuePresentKHR hooked - setting up ImGui");
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO &io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(1080, 1920);
+        ImGui_ImplOpenGL3_Init("#version 100");
+        io.Fonts->AddFontDefault();
+        ImGui_ImplAndroid_Init(nullptr);
+        setup = true;
+    }
+    
+    ImGuiIO &io = ImGui::GetIO();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplAndroid_NewFrame();
+    ImGui::NewFrame();
+    
+    DrawKenzGUIMenu();
+    Patches();
+    
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    old_vkQueuePresentKHR(queue, pPresentInfo);
 }

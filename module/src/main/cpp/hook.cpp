@@ -79,18 +79,27 @@ void *hack_thread(void *arg) {
         LOGW("KenzGUI: Failed to get IL2CPP domain");
     }).detach();
 
-    auto glDrawElements = dlsym(RTLD_NEXT, "glDrawElements");
-    if (glDrawElements) {
-        DobbyHook((void*)glDrawElements, (void*)hook_glDrawElements,
-                  (void**)&old_glDrawElements);
-        LOGI("glDrawElements hooked via RTLD_NEXT");
+    // Try Vulkan first (64-bit Unity games)
+    auto vkQueuePresentKHR = dlsym(RTLD_NEXT, "vkQueuePresentKHR");
+    if (vkQueuePresentKHR) {
+        DobbyHook((void*)vkQueuePresentKHR, (void*)hook_vkQueuePresentKHR,
+                  (void**)&old_vkQueuePresentKHR);
+        LOGI("vkQueuePresentKHR hooked via RTLD_NEXT");
     } else {
-        LOGW("glDrawElements not found - trying eglSwapBuffers");
-        auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
-        if (eglSwapBuffers) {
-            DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
-                      (void**)&old_eglSwapBuffers);
-            LOGI("eglSwapBuffers hooked via RTLD_NEXT (fallback)");
+        LOGW("Vulkan not found - trying OpenGL");
+        auto glDrawElements = dlsym(RTLD_NEXT, "glDrawElements");
+        if (glDrawElements) {
+            DobbyHook((void*)glDrawElements, (void*)hook_glDrawElements,
+                      (void**)&old_glDrawElements);
+            LOGI("glDrawElements hooked via RTLD_NEXT");
+        } else {
+            LOGW("glDrawElements not found - trying eglSwapBuffers");
+            auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
+            if (eglSwapBuffers) {
+                DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
+                          (void**)&old_eglSwapBuffers);
+                LOGI("eglSwapBuffers hooked via RTLD_NEXT (fallback)");
+            }
         }
     }
 
