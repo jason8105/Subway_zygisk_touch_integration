@@ -1,7 +1,8 @@
+#define _GNU_SOURCE    // <-- ADD THIS FIRST
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
-#include <dlfcn.h>
+#include <dlfcn.h>     // <-- RTLD_NEXT will now be available
 #include <cstdlib>
 #include <cinttypes>
 #include <string>
@@ -85,21 +86,14 @@ void *hack_thread(void *arg) {
         LOGW("KenzGUI: Failed to get IL2CPP domain - using EGL fallback");
     }).detach();
     
-    // Hook eglSwapBuffers from libunity.so
-    auto eglhandle = dlopen("libunity.so", RTLD_LAZY);
-    auto eglSwapBuffers = dlsym(eglhandle, "eglSwapBuffers");
+    // Hook eglSwapBuffers using RTLD_NEXT (KenzGUI method)
+    auto eglSwapBuffers = dlsym(RTLD_NEXT, "eglSwapBuffers");
     if (eglSwapBuffers) {
         DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
                   (void**)&old_eglSwapBuffers);
-        LOGI("eglSwapBuffers hooked");
+        LOGI("eglSwapBuffers hooked via RTLD_NEXT");
     } else {
-        auto eglhandle2 = dlopen("libEGL.so", RTLD_LAZY);
-        auto eglSwapBuffers2 = dlsym(eglhandle2, "eglSwapBuffers");
-        if (eglSwapBuffers2) {
-            DobbyHook((void*)eglSwapBuffers2, (void*)hook_eglSwapBuffers,
-                      (void**)&old_eglSwapBuffers);
-            LOGI("eglSwapBuffers hooked from libEGL.so");
-        }
+        LOGW("eglSwapBuffers not found via RTLD_NEXT");
     }
     
     LOGI("Draw Done!");
