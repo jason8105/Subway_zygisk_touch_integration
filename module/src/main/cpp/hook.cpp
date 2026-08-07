@@ -54,14 +54,12 @@ int isGame(JNIEnv *env, jstring appDataDir)
 }
 
 void *hack_thread(void *arg) {
-    // Wait for libil2cpp.so
     do {
         sleep(1);
         g_il2cppBaseMap = KittyMemory::getLibraryBaseMap("libil2cpp.so");
     } while (!g_il2cppBaseMap.isValid());
     LOGI("il2cpp base: %p", (void*)(g_il2cppBaseMap.startAddress));
 
-    // IL2CPP init in background
     std::thread([]() {
         sleep(5);
         IL2CPP::Init();
@@ -79,7 +77,6 @@ void *hack_thread(void *arg) {
         LOGW("Failed to get IL2CPP domain");
     }).detach();
 
-    // Hook eglSwapBuffers (may not be called, but try)
     auto eglHandle = dlopen("libEGL.so", RTLD_LAZY);
     if (eglHandle) {
         auto eglSwapBuffers = dlsym(eglHandle, "eglSwapBuffers");
@@ -91,7 +88,6 @@ void *hack_thread(void *arg) {
         dlclose(eglHandle);
     }
 
-    // Hook eglMakeCurrent (this is the one that gets called)
     auto eglMakeCurrent = dlsym(RTLD_DEFAULT, "eglMakeCurrent");
     if (eglMakeCurrent) {
         DobbyHook((void*)eglMakeCurrent, (void*)hook_eglMakeCurrent,
@@ -99,14 +95,12 @@ void *hack_thread(void *arg) {
         LOGI("eglMakeCurrent hooked");
     }
 
-// Hook eglSwapBuffersWithDamageKHR (used by modern Unity games)
     auto eglSwapBuffersWithDamageKHR = dlsym(RTLD_DEFAULT, "eglSwapBuffersWithDamageKHR");
     if (eglSwapBuffersWithDamageKHR) {
         DobbyHook((void*)eglSwapBuffersWithDamageKHR, (void*)hook_eglSwapBuffersWithDamageKHR,
                   (void**)&old_eglSwapBuffersWithDamageKHR);
         LOGI("eglSwapBuffersWithDamageKHR hooked");
     }
-
 
     LOGI("All hooks set up");
     return nullptr;
@@ -177,10 +171,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
-
     DrawKenzGUIMenu();
     Patches();
-
     ImGui::Render();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -190,15 +182,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
 void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
-    // Always call the original first
     old_eglMakeCurrent(dpy, draw, read, ctx);
     
-    // Log every call to see if it's being triggered
-    LOGI("hook_eglMakeCurrent called: ctx=%p draw=%p", ctx, draw);
-    
-    // Render ImGui if we have a valid context and surface
     if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
-        LOGI("hook_eglMakeCurrent: valid context");
         if (!setupimg) {
             SetupImgui();
             setupimg = true;
@@ -209,13 +195,84 @@ void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLCo
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplAndroid_NewFrame();
             ImGui::NewFrame();
-            
             DrawKenzGUIMenu();
             Patches();
-            
             ImGui::Render();
             glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
     }
+}
+
+// ============================================================
+// eglSwapBuffersWithDamageKHR hook (was missing)
+// ============================================================
+EGLBoolean (*old_eglSwapBuffersWithDamageKHR)(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects);
+EGLBoolean hook_eglSwapBuffersWithDamageKHR(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects) {
+    eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
+    eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
+
+    if (!setupimg) {
+        SetupImgui();
+        setupimg = true;
+    }
+
+    ImGuiIO &io = ImGui::GetIO();
+
+    if (IL2CPP::domain != nullptr && IL2CPP::API::il2cpp_class_from_name != nullptr) {
+        auto corlib = IL2CPP::API::il2cpp_get_corlib();
+        if (corlib) {
+            auto inputClass = IL2CPP::API::il2cpp_class_from_name(corlib, "UnityEngine", "Input");
+            if (inputClass) {
+                auto touchCountMethod = IL2CPP::API::il2cpp_class_get_method_from_name(inputClass, "get_touchCount", 0);
+                auto getTouchMethod = IL2CPP::API::il2cpp_class_get_method_from_name(inputClass, "GetTouch", 1);
+                
+                if (touchCountMethod && touchCountMethod->methodPointer &&
+                    getTouchMethod && getTouchMethod->methodPointer) {
+                    
+                    typedef int (*get_touchCount_t)();
+                    typedef UnityEngine_Touch_Fields (*get_touch_t)(int);
+                    
+                    auto TouchCount = (get_touchCount_t)touchCountMethod->methodPointer;
+                    auto GetTouch = (get_touch_t)getTouchMethod->methodPointer;
+                    
+                    int touchCount = TouchCount();
+                    if (touchCount > 0) {
+                        UnityEngine_Touch_Fields touch = GetTouch(0);
+                        float reverseY = io.DisplaySize.y - touch.m_Position.fields.y;
+
+                        switch (touch.m_Phase) {
+                            case TouchPhase::Began:
+                            case TouchPhase::Stationary:
+                                io.MousePos = ImVec2(touch.m_Position.fields.x, reverseY);
+                                io.MouseDown[0] = true;
+                                break;
+                            case TouchPhase::Ended:
+                            case TouchPhase::Canceled:
+                                io.MouseDown[0] = false;
+                                break;
+                            case TouchPhase::Moved:
+                                io.MousePos = ImVec2(touch.m_Position.fields.x, reverseY);
+                                break;
+                            default:
+                                break;
+                        }
+                    } else {
+                        io.MouseDown[0] = false;
+                    }
+                }
+            }
+        }
+    }
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplAndroid_NewFrame();
+    ImGui::NewFrame();
+    DrawKenzGUIMenu();
+    Patches();
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    return old_eglSwapBuffersWithDamageKHR(dpy, surface, rects, n_rects);
 }
