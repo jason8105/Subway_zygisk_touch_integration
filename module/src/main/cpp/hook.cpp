@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
