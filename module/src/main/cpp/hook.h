@@ -58,6 +58,9 @@ static char *game_data_dir = NULL;
 int isGame(JNIEnv *env, jstring appDataDir);
 void *hack_thread(void *arg);
 
+extern EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+extern EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
+
 extern EGLBoolean (*old_eglSwapBuffersWithDamageKHR)(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects);
 extern EGLBoolean hook_eglSwapBuffersWithDamageKHR(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects);
 
