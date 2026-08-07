@@ -42,25 +42,16 @@ inline bool GetScreenSizeFromUnity(float &width, float &height) {   // <-- inlin
     return true;
 }
 
-inline void SetupImgui() {   // <-- inline
+inline void SetupImgui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
-    
-    float unityW, unityH;
-    if (GetScreenSizeFromUnity(unityW, unityH)) {
-        io.DisplaySize = ImVec2(unityW, unityH);
-        LOGI("Screen size from Unity: %.0fx%.0f", unityW, unityH);
-    } else {
-        io.DisplaySize = ImVec2((float) glWidth, (float) glHeight);
-        LOGI("Screen size from EGL: %dx%d", glWidth, glHeight);
-    }
-    
+    io.DisplaySize = ImVec2(1080, 1920);
+    LOGI("SetupImgui: Using 1080x1920 fallback");
     ImGui_ImplOpenGL3_Init("#version 100");
     ImGui::StyleColorsDark();
     ImGui::GetStyle().ScaleAllSizes(7.0f);
     io.Fonts->AddFontDefault();
-    
     ImGui_ImplAndroid_Init(nullptr);
 }
 

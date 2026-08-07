@@ -28,127 +28,6 @@ ProcMap g_il2cppBaseMap;
 int glWidth, glHeight;
 bool setupimg = false;
 
-// Frame counters for debugging
-static int frameCount_eglSwapBuffers = 0;
-static int frameCount_glDrawElements = 0;
-static int frameCount_vkQueuePresentKHR = 0;
-static int frameCount_ANativeWindow_lock = 0;
-static int frameCount_eglMakeCurrent = 0;
-
-void DumpAllSymbols() {
-    LOGI("====================================================");
-    LOGI("=== COMPREHENSIVE SYMBOL DUMP ===");
-    LOGI("====================================================");
-    
-    // 1. Check all rendering libraries
-    LOGI("--- Checking loaded libraries ---");
-    const char* libs[] = {
-        "libunity.so", "libEGL.so", "libGLESv2.so", "libGLESv3.so",
-        "libvulkan.so", "libnativewindow.so", "libandroid.so",
-        "libc.so", "libm.so", "libOpenSLES.so"
-    };
-    for (auto lib : libs) {
-        auto handle = dlopen(lib, RTLD_LAZY | RTLD_NOLOAD);
-        LOGI("  Library %s: %s", lib, handle ? "LOADED" : "NOT LOADED");
-        if (handle) dlclose(handle);
-    }
-    
-    // 2. Dump ALL rendering-related symbols
-    LOGI("--- Checking all rendering symbols ---");
-    const char* symbols[] = {
-        // EGL
-        "eglSwapBuffers", "eglMakeCurrent", "eglSwapInterval",
-        "eglGetDisplay", "eglCreateWindowSurface", "eglDestroySurface",
-        "eglQuerySurface", "eglGetError", "eglInitialize",
-        "eglChooseConfig", "eglCreateContext", "eglMakeCurrent",
-        // OpenGL ES
-        "glDrawElements", "glDrawArrays", "glClear",
-        "glClearColor", "glViewport", "glScissor",
-        "glUseProgram", "glBindFramebuffer", "glFinish",
-        "glFlush", "eglSwapBuffersWithDamageKHR",
-        // Vulkan
-        "vkQueuePresentKHR", "vkQueueSubmit", "vkAcquireNextImageKHR",
-        "vkCreateSwapchainKHR", "vkDestroySwapchainKHR",
-        "vkGetSwapchainImagesKHR", "vkQueueWaitIdle",
-        "vkDeviceWaitIdle", "vkWaitForFences",
-        // Android native
-        "ANativeWindow_lock", "ANativeWindow_unlockAndPost",
-        "ANativeWindow_setBuffersGeometry", "eglCreateSyncKHR",
-        "eglClientWaitSyncKHR", "eglDestroySyncKHR",
-        // Unity specific
-        "UnitySendMessage", "UnityPlayerRender",
-        "_Z19UnityPlayerRenderv", "GfxDeviceGLESInit",
-        "GfxDeviceVulkanInit"
-    };
-    
-    for (auto sym : symbols) {
-        void* ptr = nullptr;
-        // Try RTLD_DEFAULT first
-        ptr = dlsym(RTLD_DEFAULT, sym);
-        if (ptr) {
-            LOGI("  [RTLD_DEFAULT] %s = %p", sym, ptr);
-        } else {
-            // Try RTLD_NEXT
-            ptr = dlsym(RTLD_NEXT, sym);
-            if (ptr) {
-                LOGI("  [RTLD_NEXT]    %s = %p", sym, ptr);
-            } else {
-                LOGI("  [NOT FOUND]    %s", sym);
-            }
-        }
-    }
-    
-    // 3. Dump /proc/self/maps for all loaded libraries
-    LOGI("--- Dumping loaded libraries from /proc/self/maps ---");
-    FILE* maps = fopen("/proc/self/maps", "r");
-    if (maps) {
-        char line[512];
-        while (fgets(line, sizeof(line), maps)) {
-            // Only log .so files
-            if (strstr(line, ".so")) {
-                // Remove newline
-                line[strcspn(line, "\n")] = 0;
-                LOGI("  MAP: %s", line);
-            }
-        }
-        fclose(maps);
-    }
-    
-    // 4. Get current process info
-    LOGI("--- Process info ---");
-    LOGI("  PID: %d", getpid());
-    LOGI("  UID: %d", getuid());
-    
-    // 5. Check EGL display
-    LOGI("--- EGL Display check ---");
-    EGLDisplay dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (dpy != EGL_NO_DISPLAY) {
-        LOGI("  EGL Display: %p", dpy);
-        EGLint major, minor;
-        if (eglInitialize(dpy, &major, &minor)) {
-            LOGI("  EGL initialized: %d.%d", major, minor);
-            LOGI("  EGL Vendor: %s", eglQueryString(dpy, EGL_VENDOR));
-            LOGI("  EGL Version: %s", eglQueryString(dpy, EGL_VERSION));
-            LOGI("  EGL Extensions: %s", eglQueryString(dpy, EGL_EXTENSIONS));
-        }
-    } else {
-        LOGI("  EGL Display: NULL (no display yet)");
-    }
-    
-    // 6. Try to get OpenGL renderer info
-    LOGI("--- OpenGL info ---");
-    const char* renderer = (const char*)glGetString(GL_RENDERER);
-    const char* version = (const char*)glGetString(GL_VERSION);
-    const char* vendor = (const char*)glGetString(GL_VENDOR);
-    LOGI("  GL_RENDERER: %s", renderer ? renderer : "NULL");
-    LOGI("  GL_VERSION: %s", version ? version : "NULL");
-    LOGI("  GL_VENDOR: %s", vendor ? vendor : "NULL");
-    
-    LOGI("====================================================");
-    LOGI("=== DUMP COMPLETE ===");
-    LOGI("====================================================");
-}
-
 int isGame(JNIEnv *env, jstring appDataDir)
 {
     if (!appDataDir)
@@ -159,7 +38,6 @@ int isGame(JNIEnv *env, jstring appDataDir)
     if (sscanf(app_data_dir, "/data/%*[^/]/%d/%s", &user, package_name) != 2) {
         if (sscanf(app_data_dir, "/data/%*[^/]/%s", package_name) != 1) {
             package_name[0] = '\0';
-            LOGW("can't parse %s", app_data_dir);
             return 0;
         }
     }
@@ -176,11 +54,6 @@ int isGame(JNIEnv *env, jstring appDataDir)
 }
 
 void *hack_thread(void *arg) {
-    LOGI("hack_thread started - PID: %d, TID: %d", getpid(), gettid());
-    
-    // Dump all symbols first
-    DumpAllSymbols();
-    
     // Wait for libil2cpp.so
     do {
         sleep(1);
@@ -188,7 +61,7 @@ void *hack_thread(void *arg) {
     } while (!g_il2cppBaseMap.isValid());
     LOGI("il2cpp base: %p", (void*)(g_il2cppBaseMap.startAddress));
 
-    // Reduce IL2CPP wait to 5 seconds
+    // IL2CPP init in background
     std::thread([]() {
         sleep(5);
         IL2CPP::Init();
@@ -196,114 +69,77 @@ void *hack_thread(void *arg) {
             if (IL2CPP::API::il2cpp_domain_get != nullptr) {
                 IL2CPP::domain = IL2CPP::API::il2cpp_domain_get();
                 if (IL2CPP::domain != nullptr) {
-                    LOGI("KenzGUI: IL2CPP Domain obtained: %p", IL2CPP::domain);
+                    LOGI("IL2CPP Domain obtained: %p", IL2CPP::domain);
                     IL2CPP::Attach();
                     return;
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        LOGW("KenzGUI: Failed to get IL2CPP domain");
+        LOGW("Failed to get IL2CPP domain");
     }).detach();
 
-    // Try EVERY possible hook in order
-    LOGI("=== Attempting to hook rendering functions ===");
-    
-    // 1. Try eglSwapBuffers from libEGL.so directly
+    // Hook eglSwapBuffers
     auto eglHandle = dlopen("libEGL.so", RTLD_LAZY);
     if (eglHandle) {
         auto eglSwapBuffers = dlsym(eglHandle, "eglSwapBuffers");
         if (eglSwapBuffers) {
-            LOGI("HOOKING: eglSwapBuffers from libEGL.so at %p", eglSwapBuffers);
             DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
                       (void**)&old_eglSwapBuffers);
-            LOGI("SUCCESS: eglSwapBuffers hooked");
-        } else {
-            LOGW("FAILED: eglSwapBuffers not found in libEGL.so");
+            LOGI("eglSwapBuffers hooked");
         }
         dlclose(eglHandle);
-    } else {
-        LOGW("FAILED: libEGL.so not found");
     }
     
-    // 2. Try glDrawElements
+    // Hook glDrawElements
     auto glDrawElements = dlsym(RTLD_DEFAULT, "glDrawElements");
     if (glDrawElements) {
-        LOGI("HOOKING: glDrawElements at %p", glDrawElements);
         DobbyHook((void*)glDrawElements, (void*)hook_glDrawElements,
                   (void**)&old_glDrawElements);
-        LOGI("SUCCESS: glDrawElements hooked");
-    } else {
-        LOGW("FAILED: glDrawElements not found");
+        LOGI("glDrawElements hooked");
     }
     
-    // 3. Try vkQueuePresentKHR
+    // Hook vkQueuePresentKHR
     auto vkQueuePresentKHR = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
     if (vkQueuePresentKHR) {
-        LOGI("HOOKING: vkQueuePresentKHR at %p", vkQueuePresentKHR);
         DobbyHook((void*)vkQueuePresentKHR, (void*)hook_vkQueuePresentKHR,
                   (void**)&old_vkQueuePresentKHR);
-        LOGI("SUCCESS: vkQueuePresentKHR hooked");
-    } else {
-        LOGW("FAILED: vkQueuePresentKHR not found");
+        LOGI("vkQueuePresentKHR hooked");
     }
     
-    // 4. Try ANativeWindow_lock
+    // Hook ANativeWindow_lock
     auto nativeWindowLock = dlsym(RTLD_DEFAULT, "ANativeWindow_lock");
     if (nativeWindowLock) {
-        LOGI("HOOKING: ANativeWindow_lock at %p", nativeWindowLock);
         DobbyHook((void*)nativeWindowLock, (void*)hook_ANativeWindow_lock,
                   (void**)&old_ANativeWindow_lock);
-        LOGI("SUCCESS: ANativeWindow_lock hooked");
-    } else {
-        LOGW("FAILED: ANativeWindow_lock not found");
+        LOGI("ANativeWindow_lock hooked");
     }
     
-    // 5. Try eglMakeCurrent
+    // Hook eglMakeCurrent
     auto eglMakeCurrent = dlsym(RTLD_DEFAULT, "eglMakeCurrent");
     if (eglMakeCurrent) {
-        LOGI("HOOKING: eglMakeCurrent at %p", eglMakeCurrent);
         DobbyHook((void*)eglMakeCurrent, (void*)hook_eglMakeCurrent,
                   (void**)&old_eglMakeCurrent);
-        LOGI("SUCCESS: eglMakeCurrent hooked");
-    } else {
-        LOGW("FAILED: eglMakeCurrent not found");
+        LOGI("eglMakeCurrent hooked");
     }
 
-    LOGI("=== All hooks attempted ===");
-    LOGI("Draw Done! - waiting for hook calls...");
+    LOGI("All hooks set up");
     return nullptr;
 }
 
 // ============================================================
-// HOOK FUNCTIONS WITH DETAILED LOGGING
+// HOOK FUNCTIONS
 // ============================================================
 
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    frameCount_eglSwapBuffers++;
-    
-    // Log first few calls
-    if (frameCount_eglSwapBuffers <= 5 || frameCount_eglSwapBuffers % 100 == 0) {
-        LOGI("CALLED: eglSwapBuffers #%d (TID: %d)", frameCount_eglSwapBuffers, gettid());
-    }
-    
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
-    
-    // Log screen size on first call
-    if (frameCount_eglSwapBuffers == 1) {
-        LOGI("Screen size from EGL: %dx%d", glWidth, glHeight);
-    }
 
     if (!setupimg) {
-        LOGI("Setting up ImGui from eglSwapBuffers");
         SetupImgui();
         setupimg = true;
-        LOGI("ImGui setup complete");
     }
-
-    UpdateScreenSizeIfNeeded();
 
     ImGuiIO &io = ImGui::GetIO();
 
@@ -369,15 +205,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
 void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void* indices);
 void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
-    frameCount_glDrawElements++;
-    
-    if (frameCount_glDrawElements <= 5 || frameCount_glDrawElements % 100 == 0) {
-        LOGI("CALLED: glDrawElements #%d (TID: %d)", frameCount_glDrawElements, gettid());
-    }
-    
     static bool setup = false;
     if (!setup) {
-        LOGI("glDrawElements hooked - setting up ImGui");
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO &io = ImGui::GetIO();
@@ -386,7 +215,6 @@ void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* in
         io.Fonts->AddFontDefault();
         ImGui_ImplAndroid_Init(nullptr);
         setup = true;
-        LOGI("glDrawElements ImGui setup complete");
     }
     
     ImGuiIO &io = ImGui::GetIO();
@@ -406,15 +234,8 @@ void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* in
 
 void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
 void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
-    frameCount_vkQueuePresentKHR++;
-    
-    if (frameCount_vkQueuePresentKHR <= 5 || frameCount_vkQueuePresentKHR % 100 == 0) {
-        LOGI("CALLED: vkQueuePresentKHR #%d (TID: %d)", frameCount_vkQueuePresentKHR, gettid());
-    }
-    
     static bool setup = false;
     if (!setup) {
-        LOGI("vkQueuePresentKHR hooked - setting up ImGui");
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO &io = ImGui::GetIO();
@@ -423,7 +244,6 @@ void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
         io.Fonts->AddFontDefault();
         ImGui_ImplAndroid_Init(nullptr);
         setup = true;
-        LOGI("vkQueuePresentKHR ImGui setup complete");
     }
     
     ImGuiIO &io = ImGui::GetIO();
@@ -443,15 +263,8 @@ void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
 
 void (*old_ANativeWindow_lock)(void* window, void* outBuffer, void* inOutDirtyBounds);
 void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBounds) {
-    frameCount_ANativeWindow_lock++;
-    
-    if (frameCount_ANativeWindow_lock <= 5 || frameCount_ANativeWindow_lock % 100 == 0) {
-        LOGI("CALLED: ANativeWindow_lock #%d (TID: %d)", frameCount_ANativeWindow_lock, gettid());
-    }
-    
     static bool setup = false;
     if (!setup) {
-        LOGI("ANativeWindow_lock hooked - setting up ImGui");
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO &io = ImGui::GetIO();
@@ -460,7 +273,6 @@ void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBoun
         io.Fonts->AddFontDefault();
         ImGui_ImplAndroid_Init(nullptr);
         setup = true;
-        LOGI("ANativeWindow_lock ImGui setup complete");
     }
     
     ImGuiIO &io = ImGui::GetIO();
@@ -480,31 +292,16 @@ void hook_ANativeWindow_lock(void* window, void* outBuffer, void* inOutDirtyBoun
 
 void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
-    frameCount_eglMakeCurrent++;
-    
-    if (frameCount_eglMakeCurrent <= 5 || frameCount_eglMakeCurrent % 100 == 0) {
-        LOGI("CALLED: eglMakeCurrent #%d (TID: %d)", frameCount_eglMakeCurrent, gettid());
-    }
-    
     // Always call the original first
     old_eglMakeCurrent(dpy, draw, read, ctx);
     
-    // Render ImGui if we have a valid context and surface with proper size
+    // Render ImGui if we have a valid context and surface
     if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
-        EGLint w = 1080, h = 1920;
-        eglQuerySurface(dpy, draw, EGL_WIDTH, &w);
-        eglQuerySurface(dpy, draw, EGL_HEIGHT, &h);
-        glWidth = w;
-        glHeight = h;
-        
-        // Only set up ImGui once we have a real screen size
-        if (w > 100 && h > 100 && !setupimg) {
-            LOGI("Setting up ImGui from eglMakeCurrent - screen %dx%d", w, h);
+        if (!setupimg) {
             SetupImgui();
             setupimg = true;
         }
         
-        // Render ImGui every frame
         if (setupimg) {
             ImGuiIO &io = ImGui::GetIO();
             ImGui_ImplOpenGL3_NewFrame();
