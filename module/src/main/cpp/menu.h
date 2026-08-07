@@ -14,7 +14,7 @@ extern int glWidth, glHeight;
 extern bool setupimg;
 
 // Helper: get screen size from Unity safely
-bool GetScreenSizeFromUnity(float &width, float &height) {
+inline bool GetScreenSizeFromUnity(float &width, float &height) {   // <-- inline
     width = 1080.0f;
     height = 1920.0f;
     
@@ -42,7 +42,7 @@ bool GetScreenSizeFromUnity(float &width, float &height) {
     return true;
 }
 
-void SetupImgui() {
+inline void SetupImgui() {   // <-- inline
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -64,7 +64,7 @@ void SetupImgui() {
     ImGui_ImplAndroid_Init(nullptr);
 }
 
-void UpdateScreenSizeIfNeeded() {
+inline void UpdateScreenSizeIfNeeded() {   // <-- inline
     ImGuiIO &io = ImGui::GetIO();
     if (io.DisplaySize.x > 100 && io.DisplaySize.y > 100) return;
     
