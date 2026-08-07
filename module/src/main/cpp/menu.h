@@ -13,18 +13,14 @@
 extern int glWidth, glHeight;
 extern bool setupimg;
 
-// Helper: get screen size from Unity safely (KenzGUI method)
+// Helper: get screen size from Unity safely
 bool GetScreenSizeFromUnity(float &width, float &height) {
-    // Default fallback
     width = 1080.0f;
     height = 1920.0f;
     
-    // Only try IL2CPP if domain is ready
     if (IL2CPP::domain == nullptr) return false;
     if (IL2CPP::API::il2cpp_domain_get == nullptr) return false;
     
-    // Try to find Screen class and get_width/get_height methods
-    // This uses the Il2Cpp API from your il2cpp.h
     auto corlib = IL2CPP::API::il2cpp_get_corlib();
     if (!corlib) return false;
     
@@ -46,39 +42,18 @@ bool GetScreenSizeFromUnity(float &width, float &height) {
     return true;
 }
 
-void DrawMenu()
-{
-    {
-        ImGui::Begin("ZyCheats");
-        ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_FittingPolicyResizeDown;
-        if (ImGui::BeginTabBar("Menu", tab_bar_flags)) {
-            if (ImGui::BeginTabItem("Cheats")) {
-                
-                ImGui::Checkbox("Free Shopping", &stopZ);
-                
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-        Patches();
-        ImGui::End();
-    }
-}
-
 void SetupImgui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     
-    // KenzGUI method: try Unity Screen API first, fallback to EGL
     float unityW, unityH;
     if (GetScreenSizeFromUnity(unityW, unityH)) {
         io.DisplaySize = ImVec2(unityW, unityH);
-        LOGI("KenzGUI: Screen size from Unity: %.0fx%.0f", unityW, unityH);
+        LOGI("Screen size from Unity: %.0fx%.0f", unityW, unityH);
     } else {
-        // Fallback to EGL
         io.DisplaySize = ImVec2((float) glWidth, (float) glHeight);
-        LOGI("KenzGUI: Screen size from EGL: %dx%d", glWidth, glHeight);
+        LOGI("Screen size from EGL: %dx%d", glWidth, glHeight);
     }
     
     ImGui_ImplOpenGL3_Init("#version 100");
@@ -89,44 +64,15 @@ void SetupImgui() {
     ImGui_ImplAndroid_Init(nullptr);
 }
 
-// Update screen size from Unity on each frame (if domain becomes ready later)
 void UpdateScreenSizeIfNeeded() {
     ImGuiIO &io = ImGui::GetIO();
-    
-    // If we already have valid size from Unity, skip
     if (io.DisplaySize.x > 100 && io.DisplaySize.y > 100) return;
     
     float unityW, unityH;
     if (GetScreenSizeFromUnity(unityW, unityH)) {
         io.DisplaySize = ImVec2(unityW, unityH);
-        LOGI("KenzGUI: Updated screen size from Unity: %.0fx%.0f", unityW, unityH);
+        LOGI("Updated screen size from Unity: %.0fx%.0f", unityW, unityH);
     }
-}
-
-EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
-EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
-    eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
-
-    if (!setupimg) {
-        SetupImgui();
-        setupimg = true;
-    }
-
-    // Try to update screen size from Unity if domain is now ready
-    UpdateScreenSizeIfNeeded();
-
-    ImGuiIO &io = ImGui::GetIO();
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplAndroid_NewFrame();
-    ImGui::NewFrame();
-
-    DrawMenu();
-
-    ImGui::Render();
-    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    return old_eglSwapBuffers(dpy, surface);
 }
 
 #endif //ZYGISK_MENU_TEMPLATE_MENU_H

@@ -11,7 +11,6 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Compiler / linker flags
 set(COMMON_FLAGS "-ffixed-x18 -Werror=format -fdata-sections -ffunction-sections")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -fno-exceptions -fno-rtti")
@@ -26,7 +25,6 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
 endif()
 
-# Include directories - FIXED to match your structure
 include_directories(
     KittyMemory
     Include
@@ -40,7 +38,6 @@ include_directories(
     ${ANDROID_NDK}/sources/android/native_app_glue
 )
 
-# Source collection
 file(GLOB_RECURSE XDL_SRC   CONFIGURE_DEPENDS xdl/*.c xdl/*.cpp)
 file(GLOB_RECURSE IL2CPP_SRC CONFIGURE_DEPENDS il2cpp/*.c il2cpp/*.cpp)
 
@@ -52,7 +49,6 @@ set(MODULE_SRCS
     ImGui/imgui_tables.cpp
     ImGui/backends/imgui_impl_opengl3.cpp
     ImGui/backends/imgui_impl_android.cpp
-    # REMOVED: Vulkan backend
 
     KittyMemory/KittyArm64.cpp
     KittyMemory/KittyMemory.cpp
@@ -64,6 +60,7 @@ set(MODULE_SRCS
     main.cpp
     hook.cpp
     menu.cpp
+    GUI.cpp                    # <-- NEW
 
     ${XDL_SRC}
     ${IL2CPP_SRC}
@@ -71,11 +68,9 @@ set(MODULE_SRCS
 
 add_library(${MODULE_NAME} SHARED ${MODULE_SRCS})
 
-# Pre‑built static libraries
 set(DOBBY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libdobby.a)
 set(CURL_LIB  ${CMAKE_CURRENT_SOURCE_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/libcurl.a)
 
-# System libraries
 find_library(LOG_LIB   log)
 find_library(EGL_LIB   EGL)
 find_library(ANDROID_LIB android)
@@ -102,7 +97,6 @@ target_link_libraries(${MODULE_NAME}
     ${Z_LIB}
 )
 
-# Strip in Release
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_custom_command(TARGET ${MODULE_NAME} POST_BUILD
         COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment

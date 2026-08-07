@@ -6,6 +6,7 @@
 #include <dobby.h>
 #include <thread>
 #include <chrono>
+#include "hook.h"
 #include "il2cpp.h"
 #include "il2cpp_hook.h"
 #include "xdl.h"
