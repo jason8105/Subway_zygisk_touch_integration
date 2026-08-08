@@ -12,8 +12,8 @@ static char *game_data_dir = NULL;
 int isGame(JNIEnv *env, jstring appDataDir);
 void *hack_thread(void *arg);
 
-extern void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
-extern void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo);
+extern EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+extern EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
 
 #define LOG_TAG "zyCheats"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)

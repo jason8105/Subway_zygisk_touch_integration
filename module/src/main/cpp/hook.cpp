@@ -76,12 +76,16 @@ void *hack_thread(void *arg) {
         LOGW("Failed to get IL2CPP domain");
     }).detach();
 
-    // Hook vkQueuePresentKHR (Vulkan) – no egl fallback
-    auto vkQueuePresentKHR = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
-    if (vkQueuePresentKHR) {
-        DobbyHook((void*)vkQueuePresentKHR, (void*)hook_vkQueuePresentKHR,
-                  (void**)&old_vkQueuePresentKHR);
-        LOGI("vkQueuePresentKHR hooked");
+    // Hook eglSwapBuffers - WebView isse call nahi karta, sirf game karta hai
+    auto eglHandle = dlopen("libEGL.so", RTLD_LAZY);
+    if (eglHandle) {
+        auto eglSwapBuffers = dlsym(eglHandle, "eglSwapBuffers");
+        if (eglSwapBuffers) {
+            DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
+                      (void**)&old_eglSwapBuffers);
+            LOGI("eglSwapBuffers hooked");
+        }
+        dlclose(eglHandle);
     }
 
     LOGI("All hooks set up");
@@ -92,9 +96,8 @@ void *hack_thread(void *arg) {
 // HOOK FUNCTIONS
 // ============================================================
 
-void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
-void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
-    LOGI("vkQueuePresentKHR CALLED!");
+EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (!setupimg) {
         SetupImgui();
         setupimg = true;
@@ -110,5 +113,5 @@ void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
-    old_vkQueuePresentKHR(queue, pPresentInfo);
+    return old_eglSwapBuffers(dpy, surface);
 }
