@@ -101,17 +101,29 @@ void *hack_thread(void *arg) {
 // HOOK FUNCTIONS
 // ============================================================
 
+static EGLContext gameContext = EGL_NO_CONTEXT;
+
 void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
     old_eglMakeCurrent(dpy, draw, read, ctx);
     
+    // Store the game's context when we get a valid 1080x1920 surface
     if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
-        if (!setupimg) {
-            SetupImgui();
-            setupimg = true;
+        EGLint w = 0, h = 0;
+        eglQuerySurface(dpy, draw, EGL_WIDTH, &w);
+        eglQuerySurface(dpy, draw, EGL_HEIGHT, &h);
+        
+        // This is the game's context (1080x1920)
+        if (w > 100 && h > 100) {
+            gameContext = ctx;
+            if (!setupimg) {
+                SetupImgui();
+                setupimg = true;
+            }
         }
         
-        if (setupimg) {
+        // Only render ImGui if this is the GAME context, not WebView
+        if (setupimg && ctx == gameContext) {
             ImGuiIO &io = ImGui::GetIO();
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplAndroid_NewFrame();
