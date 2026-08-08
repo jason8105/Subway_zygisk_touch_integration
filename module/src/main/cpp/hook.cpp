@@ -77,20 +77,24 @@ void *hack_thread(void *arg) {
         LOGW("Failed to get IL2CPP domain");
     }).detach();
 
-    // Hook eglMakeCurrent (for OpenGL ES games)
-    auto eglMakeCurrent = dlsym(RTLD_DEFAULT, "eglMakeCurrent");
-    if (eglMakeCurrent) {
-        DobbyHook((void*)eglMakeCurrent, (void*)hook_eglMakeCurrent,
-                  (void**)&old_eglMakeCurrent);
-        LOGI("eglMakeCurrent hooked");
-    }
-
-    // Hook vkQueuePresentKHR (for Vulkan games - this is likely what Among Us uses)
+    // ONLY hook vkQueuePresentKHR - no eglMakeCurrent (causes WebView crash)
     auto vkQueuePresentKHR = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
     if (vkQueuePresentKHR) {
         DobbyHook((void*)vkQueuePresentKHR, (void*)hook_vkQueuePresentKHR,
                   (void**)&old_vkQueuePresentKHR);
         LOGI("vkQueuePresentKHR hooked");
+    } else {
+        // Fallback to eglSwapBuffers if Vulkan not available
+        auto eglHandle = dlopen("libEGL.so", RTLD_LAZY);
+        if (eglHandle) {
+            auto eglSwapBuffers = dlsym(eglHandle, "eglSwapBuffers");
+            if (eglSwapBuffers) {
+                DobbyHook((void*)eglSwapBuffers, (void*)hook_eglSwapBuffers,
+                          (void**)&old_eglSwapBuffers);
+                LOGI("eglSwapBuffers hooked (fallback)");
+            }
+            dlclose(eglHandle);
+        }
     }
 
     LOGI("All hooks set up");
@@ -101,36 +105,33 @@ void *hack_thread(void *arg) {
 // HOOK FUNCTIONS
 // ============================================================
 
-static EGLContext gameContext = EGL_NO_CONTEXT;
-
-void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
-void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
-    old_eglMakeCurrent(dpy, draw, read, ctx);
-    
-    if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
-        // Remove the w > 100 check — set up on ANY valid context
-        if (!setupimg) {
-            SetupImgui();
-            setupimg = true;
-        }
-        
-        if (setupimg) {
-            ImGuiIO &io = ImGui::GetIO();
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplAndroid_NewFrame();
-            ImGui::NewFrame();
-            DrawKenzGUIMenu();
-            Patches();
-            ImGui::Render();
-            glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        }
+EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    if (!setupimg) {
+        SetupImgui();
+        setupimg = true;
     }
+    if (setupimg) {
+        ImGuiIO &io = ImGui::GetIO();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplAndroid_NewFrame();
+        ImGui::NewFrame();
+        DrawKenzGUIMenu();
+        Patches();
+        ImGui::Render();
+        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
+    return old_eglSwapBuffers(dpy, surface);
 }
 
 void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
 void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
-    LOGI("vkQueuePresentKHR CALLED!");  // <-- ADD THIS
+    LOGI("vkQueuePresentKHR CALLED!");
+    if (!setupimg) {
+        SetupImgui();
+        setupimg = true;
+    }
     if (setupimg) {
         ImGuiIO &io = ImGui::GetIO();
         ImGui_ImplOpenGL3_NewFrame();
