@@ -107,23 +107,14 @@ void (*old_eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGL
 void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
     old_eglMakeCurrent(dpy, draw, read, ctx);
     
-    // Store the game's context when we get a valid 1080x1920 surface
     if (ctx != EGL_NO_CONTEXT && draw != EGL_NO_SURFACE) {
-        EGLint w = 0, h = 0;
-        eglQuerySurface(dpy, draw, EGL_WIDTH, &w);
-        eglQuerySurface(dpy, draw, EGL_HEIGHT, &h);
-        
-        // This is the game's context (1080x1920)
-        if (w > 100 && h > 100) {
-            gameContext = ctx;
-            if (!setupimg) {
-                SetupImgui();
-                setupimg = true;
-            }
+        // Remove the w > 100 check — set up on ANY valid context
+        if (!setupimg) {
+            SetupImgui();
+            setupimg = true;
         }
         
-        // Only render ImGui if this is the GAME context, not WebView
-        if (setupimg && ctx == gameContext) {
+        if (setupimg) {
             ImGuiIO &io = ImGui::GetIO();
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplAndroid_NewFrame();
@@ -139,7 +130,7 @@ void hook_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLCo
 
 void (*old_vkQueuePresentKHR)(void* queue, void* pPresentInfo);
 void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
-    // Only render ImGui if setup is done
+    LOGI("vkQueuePresentKHR CALLED!");  // <-- ADD THIS
     if (setupimg) {
         ImGuiIO &io = ImGui::GetIO();
         ImGui_ImplOpenGL3_NewFrame();
@@ -151,6 +142,5 @@ void hook_vkQueuePresentKHR(void* queue, void* pPresentInfo) {
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
-    
     old_vkQueuePresentKHR(queue, pPresentInfo);
 }
